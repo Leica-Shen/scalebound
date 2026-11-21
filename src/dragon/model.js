@@ -179,6 +179,65 @@ function mergeColored(geos, material) {
 // ───────────────────────────────────────────────────────────────────────────
 // Materials
 // ───────────────────────────────────────────────────────────────────────────
+
+// Archetype silhouettes. Eastern dragons are long, weightless, many-segmented
+// serpents with tucked limbs; western dragons are heavy, broad-chested and
+// stand on powerful legs. The same rig vocabulary expresses both extremes.
+function resolveModelConfig(catalog) {
+  const cfg = JSON.parse(JSON.stringify(catalog.model));
+  const arch = catalog.archetype || 'western';
+  if (arch === 'eastern') {
+    cfg.body.length *= 1.30;
+    cfg.body.width *= 0.64;
+    cfg.body.height *= 0.70;
+    cfg.body.segments += 2;
+    cfg.body.serpentine = true;
+    cfg.neck.count += 2;
+    cfg.neck.length *= 1.22;
+    cfg.neck.width *= 0.82;
+    cfg.neck.curve *= 1.06;
+    cfg.tail.segments += 3;
+    cfg.tail.length *= 1.30;
+    cfg.tail.width *= 0.82;
+    cfg.legs.fore *= 0.56;
+    cfg.legs.hind *= 0.56;
+    cfg.head.scale *= 0.96;
+    cfg.head.hornScale = (cfg.head.hornScale || 1) * 1.06;
+    cfg.head.whiskers = Math.max(2, cfg.head.whiskers || 0);
+    cfg.wing.span *= 0.84;
+    cfg.wing.sweep = (cfg.wing.sweep || 0.3) + 0.05;
+  } else if (arch === 'western') {
+    cfg.body.length *= 0.94;
+    cfg.body.width *= 1.22;
+    cfg.body.height *= 1.10;
+    cfg.neck.length *= 0.90;
+    cfg.neck.width *= 1.10;
+    cfg.head.scale *= 1.12;
+    cfg.legs.fore *= 1.30;
+    cfg.legs.hind *= 1.36;
+    cfg.wing.span *= 1.04;
+    cfg.tail.width *= 1.10;
+  } else {
+    // The Mushussu sits between the two worlds: a serpent neck on lion/eagle legs.
+    cfg.body.length *= 1.08;
+    cfg.body.width *= 1.05;
+    cfg.neck.length *= 1.15;
+    cfg.neck.width *= 0.94;
+    cfg.head.scale *= 0.99;
+    cfg.legs.fore *= 1.12;
+    cfg.legs.hind *= 1.18;
+    cfg.wing.span *= 0.98;
+  }
+  if (catalog.id === 'wuzhao') {
+    // The imperial dragon flies on ribbons of cloud, not a leathery sail.
+    cfg.wing.type = 'ribbon';
+    cfg.wing.sail = false;
+    cfg.wing.span *= 1.1;
+    cfg.extra.ribbons = true;
+  }
+  return cfg;
+}
+
 function makeMaterials(catalog) {
   const p = catalog.palette;
   const lambert = (color, extra = {}) => new THREE.MeshLambertMaterial({
@@ -1481,6 +1540,24 @@ function buildFeatherWing(root, mid, tip, wing, cfg, mats, s, armLen, foreLen, h
 
 function buildFinWing(root, mid, tip, wing, cfg, mats, s, armLen, foreLen, handLen) {
   const W = cfg.body.width;
+  if (cfg.wing.sail === false) {
+    // Only the leading spines and long silk banners: an eastern cloud wing.
+    box(root, armLen * 0.94, 0.12, 0.18, s * armLen * 0.46, 0.04, 0.02, mats.accent);
+    box(mid, foreLen * 0.92, 0.09, 0.14, s * foreLen * 0.45, 0.03, 0.03, mats.light);
+    for (let i = 0; i < 4; i++) {
+      const t = i / 3;
+      const fin = finPanel(tip, handLen * (0.9 + t * 0.35), 0.34, mats.membraneLight);
+      fin.position.set(s * handLen * (0.18 + t * 0.16), 0.04, -handLen * (0.1 + t * 0.1));
+      fin.rotation.y = s * 0.1;
+      fin.scale.x = 0.55;
+    }
+    box(tip, 0.16, 0.16, 0.32, s * 0.06, 0.02, 0.1, mats.accent);
+    const marker = new THREE.Object3D();
+    marker.position.set(s * handLen * 1.03, 0.03, -handLen * 0.06);
+    tip.add(marker);
+    wing.tipMarker = marker;
+    return;
+  }
   const p = mats.palette;
   const ragged = cfg.wing.ragged || 0;
   // proximal sail
@@ -1759,7 +1836,9 @@ export function buildDragon(catalog) {
     blink: 0,
     nextBlink: 3 + Math.random() * 3,
   };
-  const cfg = catalog.model;
+  const cfg = resolveModelConfig(catalog);
+  rig.modelCfg = cfg;
+  rig.archetype = catalog.archetype || 'western';
   // The outermost body root gives us secondary bob and roll without touching
   // the physics orientation.
   buildBody(inner, cfg, mats, rig);
@@ -1793,8 +1872,11 @@ export function buildDragon(catalog) {
   // camera distance for the controller.
   rig.wingSpan = cfg.wing.span;
   rig.bodyLength = cfg.body.length;
-  rig.cameraDistance = Math.max(14.5, cfg.wing.span * 1.08);
-  rig.cameraHeight = cfg.body.height * 2.9 + 4.0;
+  rig.visualLength = cfg.body.length + cfg.neck.length + cfg.tail.length;
+  rig.standOffset = cfg.body.height * 0.65 + (catalog.archetype === 'eastern' ? 0.55 : 1.15);
+  rig.floatOffset = cfg.body.height * 0.18 + 0.22;
+  rig.cameraDistance = Math.max(13.5, cfg.wing.span * 1.02);
+  rig.cameraHeight = cfg.body.height * 2.55 + 4.3 + (rig.archetype === 'eastern' ? 0.8 : 0);
 
   // Useful world-space markers.
   rig.markers = {
@@ -1812,6 +1894,12 @@ export function buildDragon(catalog) {
   });
 
   optimizeRig(rig);
+  group.traverse((o) => {
+    if (o.isMesh) {
+      o.castShadow = true;
+      o.receiveShadow = true;
+    }
+  });
   group.userData.rig = rig;
   return rig;
 }

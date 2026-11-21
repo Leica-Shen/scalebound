@@ -75,19 +75,35 @@ export class UI {
       staminaText: $('staminaText'),
       boostState: $('boostState'),
       windState: $('windState'),
-      soulCount: $('soulCount'),
-      soulPips: $('soulPips'),
-      soulNearest: $('soulNearest'),
-      soulCombo: $('soulCombo'),
+      conditionLabel: $('conditionLabel'),
+      satietyBar: $('satietyBar'),
+      satietyVal: $('satietyVal'),
+      tempBar: $('tempBar'),
+      tempVal: $('tempVal'),
+      recoveryHint: $('recoveryHint'),
+      clockValue: $('clockValue'),
+      dateValue: $('dateValue'),
+      weatherMini: $('weatherMini'),
       distanceVal: $('distanceVal'),
-      ringCount: $('ringCount'),
+      preyCount: $('preyCount'),
       timeVal: $('timeVal'),
+      promptLand: $('promptLand'),
+      promptLandText: $('promptLandText'),
+      promptFeed: $('promptFeed'),
+      promptFeedText: $('promptFeedText'),
+      abilitySlot: $('abilitySlot'),
+      abilityName: $('abilityName'),
+      abilityState: $('abilityState'),
+      abilityGlyph: $('abilityGlyph'),
+      abilityCooldown: $('abilityCooldown'),
+      selArchetype: $('selArchetype'),
+      selRest: $('selRest'),
+      selDiet: $('selDiet'),
+      selAbility: $('selAbility'),
       minimap: $('minimap'),
       miniCoord: $('miniCoord'),
       mapBiome: $('mapBiome'),
       mapWeather: $('mapWeather'),
-      targetMarker: $('targetMarker'),
-      targetDistance: $('targetDistance'),
       toastLayer: $('toastLayer'),
       biomeTitle: $('biomeTitle'),
       warning: $('flightWarning'),
@@ -101,7 +117,7 @@ export class UI {
       helpModal: $('helpModal'),
       pauseModal: $('pauseModal'),
       pauseSubName: $('pauseSubName'),
-      pauseSouls: $('pauseSouls'),
+      pausePrey: $('pausePrey'),
       pauseDistance: $('pauseDistance'),
       pauseTime: $('pauseTime'),
       resumeBtn: $('resumeBtn'),
@@ -117,7 +133,6 @@ export class UI {
 
     this._buildDragonCards();
     this._buildCompass();
-    this._buildPips();
     this._buildSpeedTicks();
     this._bindEvents();
     this.miniCtx = this.el.minimap.getContext('2d');
@@ -128,7 +143,7 @@ export class UI {
     this.miniBufferCtx = this.miniBuffer.getContext('2d');
     this.miniImage = this.miniBufferCtx.createImageData(56, 56);
     this.el.seedLabel.textContent = '20261121';
-    this.el.mapWeather.textContent = '西风 · 3级';
+    this.el.mapWeather.textContent = '晴 · 18°';
   }
 
   setCallbacks(callbacks) {
@@ -149,6 +164,7 @@ export class UI {
     this.el.nextBtn.addEventListener('click', () => this._emit('onCycle', 1));
     this.el.randomBtn.addEventListener('click', () => this._emit('onRandom'));
     this.el.hudPauseBtn.addEventListener('click', () => this._emit('onPause'));
+    if (this.el.abilitySlot) this.el.abilitySlot.addEventListener('click', () => this._emit('onAbility'));
     this.el.resumeBtn.addEventListener('click', () => this._emit('onResume'));
     this.el.pauseHelpBtn.addEventListener('click', () => this._emit('onPauseHelpRequested'));
     this.el.backMenuBtn.addEventListener('click', () => this._emit('onBackToMenu'));
@@ -212,16 +228,6 @@ export class UI {
     this.el.compassStrip.appendChild(frag);
     this.compassZeroIndex = 24; // -360..0 step 15
     this.heading = 0;
-  }
-
-  _buildPips() {
-    this.el.soulPips.innerHTML = '';
-    this.pips = [];
-    for (let i = 0; i < 9; i++) {
-      const pip = document.createElement('i');
-      this.el.soulPips.appendChild(pip);
-      this.pips.push(pip);
-    }
   }
 
   _buildSpeedTicks() {
@@ -302,6 +308,19 @@ export class UI {
     this.el.hudName.textContent = dragon.name;
     this.el.hudTrait.textContent = dragon.traitName;
     this.el.biomeTitle.querySelector('h3').textContent = '苍岚山脉';
+    const archLabel = dragon.archetype === 'eastern' ? '东方龙' : (dragon.archetype === 'western' ? '西方龙' : '蛇翼龙');
+    const rest = dragon.survival?.rest;
+    const restLabel = rest === 'water' ? '水面' : (rest === 'sky' ? '高空' : (rest === 'forest' ? '林间' : (rest === 'any' ? '全地形' : '地面')));
+    const dietNames = { fish: '游鱼', birds: '飞鸟', sheep: '岩羊' };
+    let dietLabel = (dragon.survival?.diet || []).map((d) => dietNames[d]).join(' · ');
+    if (!dietLabel) dietLabel = dragon.id === 'lilong' ? '月华 · 霜露' : '云露 · 日光';
+    this.el.selArchetype.textContent = archLabel;
+    this.el.selRest.textContent = restLabel;
+    this.el.selDiet.textContent = dietLabel;
+    this.el.selAbility.textContent = dragon.ability?.name || '龙赋';
+    this.el.abilityName.textContent = dragon.ability?.name || '龙赋';
+    this.el.abilityGlyph.textContent = dragon.ability?.name?.[0] || dragon.glyph;
+
 
     // Restart the detail entrance animation without bouncing the whole menu.
     if (this.menuReady) {
@@ -377,7 +396,6 @@ export class UI {
     this.hudTimer += dt;
     this.miniTimer += dt;
     if (this.hudTimer < 0.05) {
-      this._updateTarget(state);
       this._updateSpeedFx(state);
       return;
     }
@@ -387,22 +405,54 @@ export class UI {
     this._field('altitudeVal', String(Math.round(state.altitude || 0)));
     this._field('liftVal', String(Math.round(state.lift ?? 0)));
     this._field('distanceVal', (state.distanceKm || 0).toFixed(1));
-    this._field('ringCount', String(state.rings || 0));
+    this._field('preyCount', String(state.preyCaught || 0));
     this._field('timeVal', formatTime(state.timeSec || 0));
-    this._field('soulCount', pad2(state.souls || 0));
-    this._field('soulNearest', state.nearestSoulDist != null && isFinite(state.nearestSoulDist)
-      ? `${Math.max(0, Math.round(state.nearestSoulDist))} m` : '— m');
+    this._field('clockValue', state.env?.clock || '--:--');
+    this._field('dateValue', `${state.env?.date || '—'} · ${state.env?.seasonName || '—'}`);
+    this._field('weatherMini', `${state.env?.weatherName || '晴'} ${Math.round(state.env?.temperature ?? 18)}°`);
+    this._field('conditionLabel', state.condition || '翱翔');
+    this._field('recoveryHint', state.recoveryHint || '滑翔 · 缓慢回息');
+    const sat = Math.max(0, Math.min(100, state.satiety ?? 100));
+    this.el.satietyBar.style.width = `${sat}%`;
+    this._field('satietyVal', String(Math.round(sat)));
+    const bodyTemp = state.bodyTemp ?? 36.5;
+    this._field('tempVal', `${bodyTemp.toFixed(1)}°`);
+    const tPct = Math.max(0, Math.min(100, (bodyTemp - 28) / 14 * 100));
+    this.el.tempBar.style.width = `${tPct}%`;
+    this.el.tempBar.classList.toggle('is-cold', bodyTemp < 34.4);
+    this.el.tempBar.classList.toggle('is-hot', bodyTemp > 39.2);
+    this.el.abilityName.textContent = state.abilityName || this.dragon.ability?.name || '龙赋';
+    const cd = Math.max(0, state.abilityCooldown || 0);
+    const cdMax = Math.max(0.1, state.abilityCooldownMax || 9);
+    this.el.abilityCooldown.style.width = cd > 0.05 ? `${(1 - cd / cdMax) * 100}%` : '0%';
+    if (cd > 0.05) {
+      this._field('abilityState', `${cd.toFixed(1)}s`);
+      this.el.abilitySlot.classList.add('is-cooldown');
+    } else {
+      this._field('abilityState', state.abilityReady === false ? '未就绪' : '就绪');
+      this.el.abilitySlot.classList.remove('is-cooldown');
+    }
+    this.el.abilitySlot.classList.toggle('is-warning', !!state.abilityNoStamina);
+    const showE = !!state.promptLand;
+    const showQ = !!state.promptFeed;
+    this.el.promptLand.classList.toggle('is-hidden', !showE);
+    this.el.promptFeed.classList.toggle('is-hidden', !showQ);
+    if (showE) this.el.promptLandText.textContent = state.promptLand;
+    if (showQ) this.el.promptFeedText.textContent = state.promptFeed;
+    this._field('mapWeather', `${state.env?.weatherName || '晴'} · ${Math.round(state.env?.temperature ?? 18)}°`);
     this._field('miniCoord', `${Math.round(state.position?.x || 0)} : ${Math.round(state.position?.z || 0)}`);
     this._field('mapBiome', state.region?.name || '未知之地');
 
-    const stamina = Math.max(0, Math.min(100, state.stamina ?? 100));
+    const staminaMax = Math.max(1, state.maxStamina || 100);
+    const stamina = Math.max(0, Math.min(staminaMax, state.stamina ?? staminaMax));
+    const staminaPct = stamina / staminaMax * 100;
     const staminaDisplay = Math.round(stamina);
-    this.el.staminaBar.style.width = `${stamina}%`;
-    this.el.staminaGhost.style.width = `${stamina}%`;
-    this.el.staminaBar.classList.toggle('is-low', stamina < 24);
+    this.el.staminaBar.style.width = `${staminaPct}%`;
+    this.el.staminaGhost.style.width = `${staminaPct}%`;
+    this.el.staminaBar.classList.toggle('is-low', staminaPct < 24);
     this._field('staminaText', String(staminaDisplay));
-    if (state.ringBlessing > 0) {
-      this._field('boostState', '风环祝福 ' + Math.ceil(state.ringBlessing) + 's');
+    if (state.resting) {
+      this._field('boostState', state.restLabel || '栖地回息');
       this.el.boostState.classList.add('is-active');
       this.el.boostState.classList.remove('is-empty');
     } else if (state.boostActive) {
@@ -417,7 +467,7 @@ export class UI {
       this._field('boostState', '疾风就绪');
       this.el.boostState.classList.remove('is-active', 'is-empty');
     }
-    this._field('windState', state.boosting ? '疾风 +2.40' : `顺风 +${(state.wind || 0).toFixed(2)}`);
+    this._field('windState', state.env ? `${state.env.weatherName} · ${state.env.seasonName}` : '顺风');
 
     const lit = Math.round(Math.min(1, (state.speed || 0) / Math.max(1, state.maxSpeed || 50)) * 20);
     for (let i = 0; i < this.speedTickEls.length; i++) {
@@ -428,16 +478,6 @@ export class UI {
       if (el._hot !== isHot) { el.classList.toggle('is-hot', isHot); el._hot = isHot; }
     }
 
-    const pipsLit = Math.min(9, state.souls || 0);
-    for (let i = 0; i < this.pips.length; i++) this.pips[i].classList.toggle('is-lit', i < pipsLit);
-
-    const combo = state.combo || 1;
-    if (combo > 1.01) {
-      this.el.soulCombo.classList.add('is-live');
-      this.el.soulCombo.querySelector('b').textContent = `×${combo.toFixed(1)}`;
-    } else {
-      this.el.soulCombo.classList.remove('is-live');
-    }
 
     if (state.warning) {
       this.el.warning.classList.add('is-live');
@@ -446,7 +486,6 @@ export class UI {
       this.el.warning.classList.remove('is-live');
     }
 
-    this._updateTarget(state);
     this._updateSpeedFx(state);
 
     // minimap at ~4 Hz
@@ -457,21 +496,6 @@ export class UI {
 
     if (state.controlsHintDim) this.el.controlRibbon.classList.add('is-dim');
     else this.el.controlRibbon.classList.remove('is-dim');
-  }
-
-  _updateTarget(state) {
-    const t = state.target;
-    const el = this.el.targetMarker;
-    if (!t || !t.visible) {
-      el.classList.add('is-hidden');
-      return;
-    }
-    el.classList.remove('is-hidden');
-    el.style.left = `${t.x}px`;
-    el.style.top = `${t.y}px`;
-    el.classList.toggle('is-offscreen', !!t.offscreen);
-    el.classList.toggle('is-near', !!t.near);
-    this.el.targetDistance.textContent = t.distance != null ? `${Math.round(t.distance)}m` : '—';
   }
 
   _updateSpeedFx(state) {
@@ -541,24 +565,21 @@ export class UI {
 
     // objective dots
     const mapPoint = (x, z) => [56 + ((x - p.x) / radius) * 55, 56 - ((z - p.z) / radius) * 55];
-    if (state.minimap?.orbs) {
-      ctx.fillStyle = '#ffdc8e';
-      for (const orb of state.minimap.orbs) {
-        const [mx, my] = mapPoint(orb.x, orb.z);
+    const animalColors = { fish: '#78dbe5', birds: '#f0e1b8', sheep: '#ecd9a7' };
+    if (state.minimap?.wildlife) {
+      for (const a of state.minimap.wildlife) {
+        const [mx, my] = mapPoint(a.x, a.z);
         if ((mx - 56) ** 2 + (my - 56) ** 2 > 52 * 52) continue;
+        ctx.fillStyle = animalColors[a.type] || '#ffdc8e';
         ctx.fillRect(Math.round(mx) - 1, Math.round(my) - 1, 2, 2);
       }
     }
-    if (state.minimap?.rings) {
-      ctx.strokeStyle = 'rgba(125, 240, 211, 0.78)';
-      ctx.lineWidth = 1;
-      for (const ring of state.minimap.rings) {
-        if (ring.disabledUntil > (state.worldTime ?? state.timeSec)) continue;
-        const [mx, my] = mapPoint(ring.x, ring.z);
+    if (state.minimap?.fires) {
+      ctx.fillStyle = 'rgba(255, 132, 67, 0.9)';
+      for (const f of state.minimap.fires) {
+        const [mx, my] = mapPoint(f.x, f.z);
         if ((mx - 56) ** 2 + (my - 56) ** 2 > 52 * 52) continue;
-        ctx.beginPath();
-        ctx.arc(Math.round(mx), Math.round(my), 3, 0, Math.PI * 2);
-        ctx.stroke();
+        ctx.fillRect(Math.round(mx) - 2, Math.round(my) - 2, 4, 4);
       }
     }
 
@@ -648,7 +669,7 @@ export class UI {
 
   openPause(data) {
     this.el.pauseSubName.textContent = `${data.dragon.name} · ${data.region}`;
-    this.el.pauseSouls.textContent = String(data.souls).padStart(2, '0');
+    this.el.pausePrey.textContent = String(data.preyCaught || 0).padStart(2, '0');
     this.el.pauseDistance.innerHTML = `${data.distanceKm.toFixed(1)}<small>km</small>`;
     this.el.pauseTime.textContent = formatTime(data.timeSec);
     this.el.pauseModal.classList.remove('is-hidden');

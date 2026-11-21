@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#060d0e" />
-  <meta name="description" content="鳞界 SCALEBOUND · 九尊古龙，无界山海。一款可骑乘巨龙的像素风 3D 开放世界飞行游戏。" />
+  <meta name="description" content="鳞界 SCALEBOUND · 九尊古龙，无界山海。像素风 3D 无限世界御龙游戏，真实时间与四季天气、捕食、栖落、潜水、龙赋与自由视角。" />
   <title>鳞界 SCALEBOUND · 无界山海，御龙而行</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23070d0e'/%3E%3Cpath d='M6 11h4V7h3v3h3V6h6v4h3v3h2v8h-3v3h-5v3h-5v-3H9v-3H6z' fill='%23e8c46c'/%3E%3Crect x='20' y='13' width='3' height='3' fill='%23070d0e'/%3E%3Crect x='12' y='22' width='8' height='2' fill='%23e87c4c'/%3E%3C/svg%3E" />
 </head>
@@ -26,7 +26,7 @@
       <div class="loader-topline">
         <span>SCALEBOUND</span>
         <span>九曜龙契</span>
-        <span>BUILD 01.9</span>
+        <span>BUILD 02.0</span>
       </div>
       <div class="loader-center">
         <div class="loader-emblem" aria-hidden="true">
@@ -122,6 +122,12 @@
               <span class="trait-tag">龙 赋</span>
               <div><strong id="traitName">冥焰俯冲</strong><p id="traitDesc"></p></div>
             </div>
+            <div class="species-row">
+              <span><i>形</i><b id="selArchetype">西方龙</b></span>
+              <span><i>栖</i><b id="selRest">地面</b></span>
+              <span><i>食</i><b id="selDiet">岩羊 · 飞鸟</b></span>
+              <span><i>能</i><b id="selAbility">冥焰吐息</b></span>
+            </div>
 
             <div class="menu-actions">
               <button id="startBtn" class="start-btn" type="button">
@@ -133,7 +139,7 @@
                 <span>✦</span> 随机龙契
               </button>
             </div>
-            <p class="keyboard-hint"><kbd>←</kbd><kbd>→</kbd> 切换龙契 <span>·</span> <kbd>ENTER</kbd> 启程 <span>·</span> 右键拖拽 环视</p>
+            <p class="keyboard-hint"><kbd>←</kbd><kbd>→</kbd> 切换龙契 <span>·</span> <kbd>ENTER</kbd> 启程 <span>·</span> 拖拽环视 <span>·</span> 滚轮缩放</p>
           </div>
         </div>
 
@@ -200,11 +206,12 @@
           <div class="minimap-foot"><span id="mapBiome">苍岚山脉</span><i></i><span id="mapWeather">西风 · 3级</span></div>
         </div>
 
-        <div class="soul-panel">
-          <div class="soul-head"><span>龙 魂</span><b id="soulCount">00</b><small>/ 九曜</small></div>
-          <div class="soul-pips" id="soulPips"></div>
-          <div class="soul-nearest"><span>最近龙魂</span><b id="soulNearest">— m</b></div>
-          <div class="soul-combo" id="soulCombo"><span>连 续</span><b>×1.0</b><i></i></div>
+        <div class="vitals-panel">
+          <div class="vitals-head"><span>龙 体 · VITALS</span><b id="conditionLabel">翱翔</b></div>
+          <div class="vital-row"><span>饱 食</span><div class="vital-mini"><i id="satietyBar"></i></div><b id="satietyVal">100</b></div>
+          <div class="vital-row"><span>体 温</span><div class="vital-mini temp"><i id="tempBar"></i></div><b id="tempVal">36.5°</b></div>
+          <div class="vital-recovery"><i></i><span id="recoveryHint">滑翔 · 缓慢回息</span></div>
+          <div class="world-mini"><b id="clockValue">13:48</b><span id="dateValue">11月21日 · 秋</span><em id="weatherMini">晴 18°</em></div>
         </div>
       </aside>
 
@@ -230,25 +237,32 @@
             <span id="windState">顺风 +0.00</span>
           </div>
         </div>
+        <div id="actionPrompts" class="action-prompts">
+          <div id="promptLand" class="action-prompt is-hidden"><kbd>E</kbd><span id="promptLandText">降落</span></div>
+          <div id="promptFeed" class="action-prompt is-hidden"><kbd>Q</kbd><span id="promptFeedText">捕食</span></div>
+        </div>
+        <button id="abilitySlot" class="ability-slot" type="button" title="龙赋 (F)">
+          <kbd>F</kbd>
+          <span class="ability-glyph" id="abilityGlyph">烽</span>
+          <span class="ability-copy"><b id="abilityName">冥焰吐息</b><small id="abilityState">就绪</small></span>
+          <i id="abilityCooldown" class="ability-cooldown"></i>
+        </button>
         <div id="controlRibbon" class="control-ribbon">
           <span><kbd>W</kbd><kbd>S</kbd> 俯仰</span>
           <span><kbd>A</kbd><kbd>D</kbd> 转向</span>
           <span><kbd>SPACE</kbd> 振翅</span>
           <span><kbd>SHIFT</kbd> 疾风</span>
-          <span><kbd>F</kbd> 龙吼</span>
+          <span><kbd>F</kbd> 龙赋</span>
+          <span><kbd>Q</kbd> 捕食</span>
+          <span><kbd>E</kbd> 栖落</span>
           <span><kbd>V</kbd> 视角</span>
         </div>
       </div>
 
       <div class="hud-right-bottom">
         <div class="run-stat"><span>航 程</span><b id="distanceVal">0.0</b><small>km</small></div>
-        <div class="run-stat"><span>风 环</span><b id="ringCount">0</b><small>环</small></div>
+        <div class="run-stat"><span>捕 食</span><b id="preyCount">0</b><small>只</small></div>
         <div class="run-stat"><span>飞 行</span><b id="timeVal">00:00</b></div>
-      </div>
-
-      <div id="targetMarker" class="target-marker is-hidden">
-        <span class="target-reticle"></span>
-        <span class="target-label"><b id="targetDistance">0m</b><small>龙魂</small></span>
       </div>
 
       <div id="toastLayer" class="toast-layer" aria-live="polite"></div>
@@ -263,6 +277,9 @@
         <div class="touch-buttons">
           <button id="touchFlap" type="button">振<br/>翅</button>
           <button id="touchBoost" type="button">疾<br/>风</button>
+          <button id="touchLand" type="button">栖<br/>落</button>
+          <button id="touchAbility" type="button">龙<br/>赋</button>
+          <button id="touchFeed" type="button">捕<br/>食</button>
         </div>
       </div>
     </section>
@@ -277,7 +294,7 @@
         <div class="intro-rule"></div>
         <blockquote id="introQuote">「世界树根之下，永夜之王啃噬着最后的根须。」</blockquote>
       </div>
-      <div class="intro-foot" id="introHint">拖动鼠标环视 · 按任意键唤醒双翼</div>
+      <div class="intro-foot" id="introHint">拖拽龙身环视 · 按 WASD / SPACE 唤醒双翼</div>
     </div>
 
     <!-- ───────────────────────── Help modal ───────────────────────── -->
@@ -291,29 +308,30 @@
           <div class="help-section">
             <h3><span>01</span> 飞行</h3>
             <dl>
-              <div><dt><kbd>W</kbd> / <kbd>S</kbd></dt><dd>拉升 / 俯冲<br/><small>俯冲换取速度，拉升消耗动能</small></dd></div>
-              <div><dt><kbd>A</kbd> / <kbd>D</kbd></dt><dd>左转 / 右转<br/><small>龙身会随转向倾侧压弯</small></dd></div>
-              <div><dt><kbd>SPACE</kbd></dt><dd>振翅<br/><small>消耗耐力，产生升力与推进</small></dd></div>
-              <div><dt><kbd>SHIFT</kbd></dt><dd>疾风冲刺<br/><small>持续消耗耐力，速度大幅提升</small></dd></div>
-              <div><dt><kbd>CTRL</kbd></dt><dd>收翼减速 / 悬停滑翔</dd></div>
+              <div><dt><kbd>W</kbd> / <kbd>S</kbd></dt><dd>爬升 / 俯冲<br/><small>俯冲换速度，爬升换高度</small></dd></div>
+              <div><dt><kbd>A</kbd> / <kbd>D</kbd></dt><dd>左转 / 右转<br/><small>翼与身体同步压弯</small></dd></div>
+              <div><dt><kbd>鼠标</kbd> / <kbd>触控板</kbd></dt><dd>按住左键拖动操控<br/><small>向右拖 = 右转，向上拖 = 抬升；滚轮缩放</small></dd></div>
+              <div><dt><kbd>SPACE</kbd> / <kbd>SHIFT</kbd></dt><dd>振翅 / 疾风冲刺<br/><small>耐力耗尽后需要停下来休息</small></dd></div>
+              <div><dt><kbd>CTRL</kbd></dt><dd>收翼减速</dd></div>
             </dl>
           </div>
           <div class="help-section">
-            <h3><span>02</span> 探索</h3>
+            <h3><span>02</span> 生存</h3>
             <dl>
-              <div><dt>龙魂</dt><dd>穿过漂浮的金色龙魂晶，累积龙魂与连击。九枚龙魂将唤醒龙威。</dd></div>
-              <div><dt>风环</dt><dd>穿过遗迹风环可恢复耐力，并获得短暂的疾风祝福。</dd></div>
-              <div><dt>山海</dt><dd>地图无边生成。山脉、江河、湖泊与大海皆可跨越，贴近水面可获得顺风加速。</dd></div>
+              <div><dt><kbd>E</kbd></dt><dd>降落 / 起飞<br/><small>离地不高时可栖落；水面需水栖龙种</small></dd></div>
+              <div><dt><kbd>Q</kbd></dt><dd>捕食 / 进食<br/><small>靠近猎物或符合龙种食性时可用</small></dd></div>
+              <div><dt>恢复</dt><dd>不同龙种有不同休憩方式：地面、水面、高空、林间或夜间凝月。</dd></div>
+              <div><dt>温度 / 饱食</dt><dd>太冷、太热或饥饿都会拖慢恢复。火边、日光与水边会影响体温。</dd></div>
+              <div><dt>潜水</dt><dd>应龙与蛟龙可潜入深水，水中可捕鱼、躲避风暴。</dd></div>
             </dl>
           </div>
           <div class="help-section">
-            <h3><span>03</span> 视角 / 系统</h3>
+            <h3><span>03</span> 视角 / 龙赋</h3>
             <dl>
-              <div><dt><kbd>V</kbd></dt><dd>切换追随视角与电影视角</dd></div>
-              <div><dt>右键拖拽</dt><dd>环视龙身，松开后镜头自动回位</dd></div>
-              <div><dt><kbd>F</kbd></dt><dd>龙吼</dd></div>
+              <div><dt><kbd>V</kbd></dt><dd>追随 / 龙背 / 自由 / 电影<br/><small>自由视角可 360° 环绕龙身，右键拖拽也可环视</small></dd></div>
+              <div><dt><kbd>F</kbd></dt><dd>释放龙赋<br/><small>龙炎、雷雨、藤蔓、冰霜、星陨等会改变世界</small></dd></div>
               <div><dt><kbd>R</kbd></dt><dd>回到安全高度</dd></div>
-              <div><dt><kbd>M</kbd></dt><dd>声音开关</dd></div>
+              <div><dt><kbd>M</kbd> / <kbd>H</kbd></dt><dd>声音开关 / 手册</dd></div>
               <div><dt><kbd>ESC</kbd></dt><dd>暂停 / 更改龙契</dd></div>
             </dl>
           </div>
@@ -330,7 +348,7 @@
         <h2>云 海 小 憩</h2>
         <p class="pause-sub" id="pauseSubName">尼德霍格 · 幽蚀断崖</p>
         <div class="pause-stats">
-          <div><span>龙魂</span><b id="pauseSouls">0</b></div>
+          <div><span>捕食</span><b id="pausePrey">0</b></div>
           <div><span>航程</span><b id="pauseDistance">0.0<small>km</small></b></div>
           <div><span>时长</span><b id="pauseTime">00:00</b></div>
         </div>
@@ -339,7 +357,7 @@
           <button id="pauseHelpBtn" class="pause-btn" type="button"><span>操作手册</span><small>CONTROLS</small></button>
           <button id="backMenuBtn" class="pause-btn" type="button"><span>回到龙契</span><small>CHANGE DRAGON</small></button>
         </div>
-        <div class="pause-tip"><kbd>ESC</kbd> 返回 · 右键拖拽可环视 · 按 <kbd>V</kbd> 切换视角</div>
+        <div class="pause-tip"><kbd>ESC</kbd> 返回 · 左键拖动操控 · <kbd>V</kbd> 切换视角</div>
       </div>
     </section>
 

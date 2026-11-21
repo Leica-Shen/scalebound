@@ -1,7 +1,6 @@
 node_modules/
 dist/
-screenshots/
 .npm-cache/
+.vite/
 .DS_Store
-scalebound.html
 *.log

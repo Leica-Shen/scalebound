@@ -2339,3 +2339,203 @@ kbd { font-size: 8px; min-width: 18px; height: 17px; }
   .target-marker { transform: translate(-50%, -50%) scale(0.82); }
   .intro-card { top: 47%; }
 }
+
+/* ── survival, abilities and environmental HUD ───────────────────────── */
+.species-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  padding: 5px 0 3px;
+  margin-top: 1px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.species-row span { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.species-row i {
+  width: 14px; height: 14px; display: grid; place-items: center;
+  border: 1px solid rgba(var(--accent-rgb), 0.25);
+  background: rgba(var(--accent-rgb), 0.06);
+  color: var(--accent); font-size: 7px; font-style: normal;
+}
+.species-row b {
+  color: var(--paper-3); font-size: 8px; font-weight: 400;
+  letter-spacing: 0.08em; white-space: nowrap;
+}
+
+.vitals-panel {
+  border: 1px solid var(--line);
+  background: rgba(4, 11, 11, 0.58);
+  backdrop-filter: blur(8px);
+  padding: 12px 12px 11px;
+  box-shadow: 0 14px 44px rgba(0, 0, 0, 0.16);
+}
+.vitals-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  color: var(--paper-3); font-size: 7.5px; letter-spacing: 0.14em;
+  padding-bottom: 8px; border-bottom: 1px solid var(--line);
+}
+.vitals-head b {
+  color: var(--accent); font-size: 8px; font-weight: 400; letter-spacing: 0.18em;
+}
+.vital-row {
+  display: grid; grid-template-columns: 29px 1fr 36px; align-items: center;
+  gap: 8px; margin-top: 9px;
+}
+.vital-row > span { color: var(--paper-3); font-size: 7.5px; letter-spacing: 0.12em; }
+.vital-row > b { color: var(--paper-2); font-size: 9px; font-weight: 400; text-align: right; letter-spacing: 0.03em; }
+.vital-mini {
+  height: 5px; position: relative; background: rgba(232, 219, 190, 0.1);
+  overflow: hidden;
+}
+.vital-mini::after {
+  content: ''; position: absolute; inset: 0;
+  background: repeating-linear-gradient(90deg, transparent 0 9px, rgba(4, 11, 11, 0.44) 9px 10px);
+}
+.vital-mini i {
+  display: block; width: 100%; height: 100%;
+  background: var(--accent); box-shadow: 0 0 8px rgba(var(--accent-rgb), 0.32);
+  transition: width 0.35s ease;
+}
+.vital-mini.temp i { background: linear-gradient(90deg, #73c8dd 0%, #dfc674 48%, #f37a51 100%); }
+.vital-recovery {
+  display: flex; align-items: center; gap: 7px;
+  margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line);
+  color: var(--paper-3); font-size: 7.5px; letter-spacing: 0.04em;
+  min-height: 14px;
+}
+.vital-recovery i { width: 4px; height: 4px; background: var(--accent); box-shadow: 0 0 7px rgba(var(--accent-rgb), 0.6); flex: 0 0 auto; }
+.world-mini {
+  display: flex; align-items: baseline; gap: 7px;
+  margin-top: 9px; color: var(--paper-3); font-size: 7.5px;
+}
+.world-mini b { color: var(--paper); font-size: 17px; font-weight: 400; letter-spacing: 0.04em; line-height: 1; }
+.world-mini span { color: var(--paper-3); letter-spacing: 0.04em; }
+.world-mini em { margin-left: auto; color: var(--gold-bright); font-size: 7.5px; font-style: normal; }
+
+.action-prompts {
+  display: flex; justify-content: center; align-items: center; gap: 7px;
+  min-height: 22px; flex-wrap: wrap;
+}
+.action-prompt {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 8px; border: 1px solid rgba(232, 219, 190, 0.18);
+  background: rgba(3, 9, 9, 0.56); color: var(--paper-2);
+  font-size: 8.5px; letter-spacing: 0.06em;
+  animation: promptIn 0.25s ease-out;
+}
+.action-prompt kbd { color: var(--accent); border-color: rgba(var(--accent-rgb), 0.35); }
+@keyframes promptIn { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+.action-prompts .is-hidden, .action-prompt.is-hidden { display: none !important; }
+
+.ability-slot {
+  position: relative; display: flex; align-items: center; gap: 8px;
+  align-self: center; min-width: 214px; padding: 5px 9px;
+  border: 1px solid rgba(var(--accent-rgb), 0.34);
+  background: rgba(4, 11, 11, 0.58); color: var(--paper-2);
+  overflow: hidden; cursor: pointer; pointer-events: auto;
+  transition: opacity .25s, border-color .25s, filter .25s;
+}
+.ability-slot:hover { border-color: var(--accent); }
+.ability-slot > kbd { color: var(--accent); border-color: rgba(var(--accent-rgb), 0.4); }
+.ability-glyph {
+  width: 24px; height: 24px; display: grid; place-items: center;
+  border: 1px solid rgba(var(--accent-rgb), 0.3);
+  background: rgba(var(--accent-rgb), 0.09);
+  color: var(--accent); font-size: 11px;
+}
+.ability-copy { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.16; min-width: 0; }
+.ability-copy b { color: var(--paper); font-size: 9px; font-weight: 400; letter-spacing: 0.12em; white-space: nowrap; }
+.ability-copy small { color: var(--paper-3); font-size: 7px; letter-spacing: 0.06em; margin-top: 2px; }
+.ability-slot.is-cooldown { filter: saturate(.35); opacity: .78; }
+.ability-slot.is-warning { border-color: rgba(255, 130, 80, 0.4); }
+.ability-cooldown {
+  position: absolute; left: 0; bottom: 0; height: 2px; width: 0%;
+  background: var(--accent); box-shadow: 0 0 8px rgba(var(--accent-rgb), .5);
+  transition: width .12s linear;
+}
+
+.touch-buttons button:nth-child(n+3) { display: grid; }
+
+@media (max-height: 760px) {
+  .species-row { display: none; }
+  .vitals-panel { padding: 9px 10px 8px; }
+  .vital-row { margin-top: 6px; }
+  .vital-recovery { margin-top: 7px; padding-top: 6px; }
+  .world-mini { margin-top: 6px; }
+  .ability-slot { min-width: 190px; padding: 4px 7px; }
+  .hud-right { width: 185px; }
+}
+@media (max-height: 560px) {
+  .vitals-panel { display: none; }
+  .action-prompts { min-height: 16px; }
+  .action-prompt { font-size: 7.5px; padding: 3px 5px; }
+  .ability-slot { min-width: 160px; padding: 3px 6px; }
+  .ability-glyph { width: 18px; height: 18px; font-size: 9px; }
+  .ability-copy b { font-size: 8px; }
+  .species-row { display: none; }
+}
+
+
+/* toast sits clear of the stamina / ability cluster */
+.toast-layer { bottom: 194px; }
+@media (max-height: 760px) {
+  .toast-layer { bottom: 168px; }
+}
+@media (max-height: 560px) {
+  .toast-layer { bottom: 132px; }
+}
+
+/* refined survival HUD type */
+.vitals-head { font-size: 8.5px; }
+.vitals-head b { font-size: 9px; letter-spacing: 0.14em; }
+.vital-row > span { font-size: 8.5px; }
+.vital-row > b { font-size: 10px; }
+.vital-recovery { font-size: 8.5px; }
+.world-mini b { font-size: 19px; }
+.world-mini span, .world-mini em { font-size: 8.5px; }
+.vitals-panel { position: relative; overflow: hidden; }
+.vitals-panel::before {
+  content: ''; position: absolute; left: 0; top: 0; width: 100%; height: 2px;
+  background: linear-gradient(90deg, var(--accent), transparent 72%); opacity: .65;
+}
+.ability-slot { min-width: 234px; padding: 6px 10px; }
+.ability-copy b { font-size: 10px; }
+.ability-copy small { font-size: 8px; }
+.action-prompt { font-size: 9.5px; }
+.toast-layer { top: 112px; bottom: auto !important; }
+.biome-title { bottom: 208px; }
+.toast { max-width: min(420px, 48vw); }
+
+.species-row { gap: 7px 8px; padding: 6px 0 5px; }
+.species-row span {
+  flex: 1 1 auto; min-width: 0; padding: 3px 4px;
+  background: rgba(4, 11, 11, 0.28);
+  border: 1px solid rgba(232, 219, 190, 0.06);
+}
+.species-row i { width: 16px; height: 16px; font-size: 8px; }
+.species-row b { font-size: 9px; color: var(--paper-2); letter-spacing: 0.04em; }
+
+@media (max-height: 760px) {
+  .toast-layer { top: 82px; }
+  .biome-title { bottom: 180px; }
+}
+@media (max-height: 560px) {
+  .toast-layer { top: 56px; }
+  .biome-title { display: none; }
+  .species-row { display: none; }
+}
+
+
+@media (max-height: 500px) {
+  .touch-buttons {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px;
+    right: 10px; bottom: 8px;
+  }
+  .touch-buttons button { width: 40px; height: 40px; font-size: 7px; }
+  .hud-right-bottom { display: none; }
+  .hud-right { width: 138px; }
+  .touch-pad { bottom: 90px; }
+  .hud-left-bottom { bottom: 20px; }
+  .ability-slot { min-width: 170px; }
+  .action-prompts { bottom: auto; }
+}

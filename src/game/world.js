@@ -7,7 +7,11 @@ import {
 import { createSky, createLighting, SUN_DIR } from '../core/sky.js';
 import { mulberry32, hash2i, clamp, lerp } from '../core/noise.js';
 import { Effects } from './effects.js';
-import { SoulField, RingField } from './collectibles.js';
+import { Wildlife } from './wildlife.js';
+import { Environment } from './environment.js';
+import { StructureField } from './structures.js';
+import { addTerrainEdit } from '../core/terrain-edits.js';
+
 
 const _dummy = new THREE.Object3D();
 const _color = new THREE.Color();
@@ -110,6 +114,9 @@ const waterFrag = /* glsl */`
   uniform vec3 uFogColor;
   uniform float uFogNear;
   uniform float uFogFar;
+  uniform vec3 uSkyColor;
+  uniform vec3 uSunColor;
+  uniform float uUnderwater;
 
   float hash21(vec2 p) {
     p = fract(p * vec2(123.34, 456.21));
@@ -128,19 +135,18 @@ const waterFrag = /* glsl */`
     float crest = smoothstep(1.85, 2.85, w);
     float spec = pow(max(dot(reflect(-uSunDir, n), view), 0.0), 110.0);
 
-    vec3 deep = vec3(0.022, 0.085, 0.13);
-    vec3 mid = vec3(0.035, 0.215, 0.255);
-    vec3 shallow = vec3(0.08, 0.40, 0.36);
-    vec3 sky = vec3(0.78, 0.55, 0.30);
+    vec3 deep = mix(vec3(0.012, 0.060, 0.092), vec3(0.012, 0.035, 0.06), uUnderwater);
+    vec3 mid = mix(vec3(0.025, 0.180, 0.215), uSkyColor * 0.32, uUnderwater);
+    vec3 shallow = mix(vec3(0.06, 0.34, 0.31), uSkyColor * 0.45, uUnderwater);
     vec3 col = mix(deep, mid, 0.5 + 0.16 * w);
     col = mix(col, shallow, crest * 0.15);
-    col = mix(col, sky * 0.88, fres * 0.55);
-    col += vec3(1.0, 0.72, 0.35) * spec * 1.8;
-    col += vec3(0.9, 0.8, 0.56) * crest * 0.045;
+    col = mix(col, uSkyColor * (uUnderwater > 0.5 ? 0.52 : 0.60), fres * (0.42 + uUnderwater * 0.18));
+    col += uSunColor * spec * 0.85;
+    col += vec3(0.9, 0.8, 0.56) * crest * 0.03;
 
     float sh = hash21(q * 1.7 + floor(uTime * 2.4));
     float sparkle = step(0.992, sh) * (0.35 + 0.65 * sin(uTime * 5.0 + q.x));
-    col += vec3(1.0, 0.84, 0.55) * sparkle * 0.5;
+    col += vec3(1.0, 0.84, 0.55) * sparkle * 0.28;
 
     float dist = length(cameraPosition - vWorldPos);
     float fog = smoothstep(uFogNear, uFogFar, dist);
@@ -166,6 +172,48 @@ function buildConiferGeometry() {
   return mergeGeometries(pieces, false);
 }
 
+function buildGrassGeometry() {
+  const positions = [];
+  const normals = [];
+  const rng = mulberry32(3517);
+  for (let i = 0; i < 7; i++) {
+    const a = (i / 7) * Math.PI * 2 + rng() * 0.4;
+    const baseX = Math.cos(a) * 0.08;
+    const baseZ = Math.sin(a) * 0.08;
+    const width = 0.06 + rng() * 0.06;
+    const h = 0.5 + rng() * 0.9;
+    const leanX = Math.cos(a) * (0.18 + rng() * 0.32);
+    const leanZ = Math.sin(a) * (0.18 + rng() * 0.32);
+    const tipX = baseX + leanX;
+    const tipZ = baseZ + leanZ;
+    const nx = Math.cos(a + 0.5);
+    const nz = Math.sin(a + 0.5);
+    positions.push(
+      baseX - nx * width, 0, baseZ - nz * width,
+      baseX + nx * width, 0, baseZ + nz * width,
+      tipX, h, tipZ,
+    );
+    const n = [nx * 0.3, 0.8, nz * 0.3];
+    for (let k = 0; k < 3; k++) normals.push(...n);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+  return geo;
+}
+
+function buildBushGeometry() {
+  const parts = [];
+  const rng = mulberry32(7123);
+  for (let i = 0; i < 4; i++) {
+    const g = new THREE.IcosahedronGeometry(0.55 + rng() * 0.45, 0);
+    g.scale(1.1, 0.8 + rng() * 0.5, 1.1);
+    g.translate((rng() - 0.5) * 0.7, 0.45 + rng() * 0.3, (rng() - 0.5) * 0.7);
+    parts.push(g);
+  }
+  return mergeGeometries(parts, false);
+}
+
 function buildBroadleafGeometry() {
   const pieces = [];
   const rng = mulberry32(9821);
@@ -181,14 +229,49 @@ function buildBroadleafGeometry() {
   return mergeGeometries(pieces, false);
 }
 
-const CONIFER_COLORS = [0x315a42, 0x3a6b4b, 0x477b51, 0x2c4f3a, 0x56855b, 0x416f48];
-const BROADLEAF_COLORS = [0x4d7a46, 0x649150, 0x7da158, 0x8ca958, 0x9cab5f, 0x557e42];
-const AUTUMN_COLORS = [0xb8823f, 0xc6944c, 0x9d733c, 0x936738, 0xd0a458];
+const SEASON_FOLIAGE = [
+  {
+    conifer: [0x315a42, 0x3a6b4b, 0x477b51, 0x3f7451, 0x56855b, 0x416f48],
+    broad: [0x6a9e4b, 0x7eae58, 0x96ba62, 0xa8c46c, 0x74a45a, 0x5f934b, 0xe2a6a5],
+    bush: [0x4c8a46, 0x5d9a51, 0x77a65b, 0xbc8d75],
+    grass: [0x5b8b49, 0x76a355, 0x8eaa5e, 0x9bb061],
+  },
+  {
+    conifer: [0x2b563b, 0x346b45, 0x3f7650, 0x315f40, 0x4a8055, 0x396945],
+    broad: [0x497c43, 0x5c904c, 0x6e9f53, 0x84ac5d, 0x94b561, 0x527f40],
+    bush: [0x3f783e, 0x51884a, 0x659454, 0x789f5b],
+    grass: [0x4e7e3d, 0x648d46, 0x7b9b4f, 0x8ba958],
+  },
+  {
+    conifer: [0x365b3d, 0x426b45, 0x52794d, 0x3c5c3f, 0x5a8050, 0x476846],
+    broad: [0xb8823f, 0xc6944c, 0x9d733c, 0x936738, 0xd0a458, 0xb65b3b, 0xcfa653],
+    bush: [0x8d6a3e, 0xa57e46, 0xb5894d, 0x7c6d42],
+    grass: [0x7f8848, 0x9b9550, 0xb19a58, 0x756f41],
+  },
+  {
+    conifer: [0x3d5d50, 0x496b59, 0x577763, 0x355045, 0x647f6b, 0x4e675a],
+    broad: [0x77786a, 0x8b8d7c, 0x676b5e, 0x9b9a8a, 0x7a7764, 0xa8a89a],
+    bush: [0x6f7468, 0x828779, 0x959b8b, 0x5f655d],
+    grass: [0x747b64, 0x8b9070, 0xa3a481, 0x6f7964],
+  },
+];
+const SNOW_TINT = new THREE.Color(0xe8efea);
+
+function treeColor(tree, season, snowCover) {
+  const palette = SEASON_FOLIAGE[season] || SEASON_FOLIAGE[2];
+  const list = tree.species === 0 ? palette.conifer : palette.broad;
+  _color.setHex(list[Math.floor(tree.tint * list.length)]);
+  _color.offsetHSL(0, 0.01 * (tree.tint - 0.5), (tree.tint - 0.5) * 0.05);
+  if (tree.species === 1 && season === 0 && tree.tint > 0.9) _color.setHex(0xe2a6a5);
+  if (snowCover > 0.02) _color.lerp(SNOW_TINT, Math.min(0.7, snowCover * (0.26 + tree.tint * 0.35)));
+  return _color;
+}
 
 export class World {
   constructor(scene) {
     this.scene = scene;
     this.scene.fog = new THREE.Fog(0xa3b8b2, 300, 900);
+    this.fogColorTarget = new THREE.Color(0xa3b8b2);
     this.lights = createLighting(scene);
     this.lights.hero.intensity = 0.8;
     this.charLight = new THREE.PointLight(0xffd4ae, 680, 86, 1.75);
@@ -202,13 +285,16 @@ export class World {
     });
     // Add close-range pixel grain and grass/stone speckles without another
     // geometry tier. The terrain still reads as one clean, infinite surface.
+    this.terrainUniforms = { season: { value: 2 }, snow: { value: 0 } };
     this.terrainMaterial.onBeforeCompile = (shader) => {
+      shader.uniforms.uSeason = this.terrainUniforms.season;
+      shader.uniforms.uSnowCover = this.terrainUniforms.snow;
       shader.vertexShader = 'varying vec3 vTWorld;\n' + shader.vertexShader;
       shader.vertexShader = shader.vertexShader.replace(
         '#include <begin_vertex>',
         '#include <begin_vertex>\n  vTWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;',
       );
-      shader.fragmentShader = 'varying vec3 vTWorld;\n' + shader.fragmentShader;
+      shader.fragmentShader = 'varying vec3 vTWorld;\nuniform float uSeason;\nuniform float uSnowCover;\n' + shader.fragmentShader;
       shader.fragmentShader = shader.fragmentShader.replace(
         '#include <color_fragment>',
         `#include <color_fragment>
@@ -222,6 +308,11 @@ export class World {
         float grassy = smoothstep(0.015, 0.13, diffuseColor.g - diffuseColor.r);
         float blade = step(0.72, tn2) * grassy * tfade;
         diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.82, 1.08, 0.78) + vec3(0.012, 0.025, 0.0), blade * 0.42);
+        float greenness = smoothstep(0.02, 0.2, diffuseColor.g - diffuseColor.r);
+        vec3 autumnTint = diffuseColor.rgb * vec3(1.48, 0.94, 0.30) + vec3(0.11, 0.05, 0.0);
+        diffuseColor.rgb = mix(diffuseColor.rgb, autumnTint, greenness * step(1.5, uSeason) * (1.0 - step(2.5, uSeason)) * 0.92);
+        float winter = step(2.5, uSeason) * uSnowCover;
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.9, 0.93, 0.91), greenness * winter * 0.95);
         `,
       );
     };
@@ -258,6 +349,10 @@ export class World {
       } catch { /* ignore */ }
     }
     this.mode = 'menu';
+    this.season = -1;
+    this.snowCover = 0;
+    this.structureClearings = [];
+    this.windStrength = 0.2;
     this.fogNearTarget = 300;
     this.fogFarTarget = 900;
     this._lastFocus = new THREE.Vector3(Infinity, 0, Infinity);
@@ -265,8 +360,9 @@ export class World {
     this._buildClouds();
     this._buildProps();
     this.effects = new Effects(scene);
-    this.souls = new SoulField(scene);
-    this.rings = new RingField(scene);
+    this.wildlife = new Wildlife(scene);
+    this.environment = new Environment(this);
+    this.structures = new StructureField(scene, this);
     this.waterMesh.position.y = SEA_LEVEL;
     this.heroDirection = new THREE.Vector3();
 
@@ -316,7 +412,11 @@ export class World {
         uFogColor: { value: new THREE.Color(0xa3b8b2) },
         uFogNear: { value: 170 },
         uFogFar: { value: 640 },
+        uSkyColor: { value: new THREE.Color(0x9fb8b0) },
+        uSunColor: { value: new THREE.Color(0xffd28a) },
+        uUnderwater: { value: 0 },
       },
+      side: THREE.DoubleSide,
       vertexShader: waterVert,
       fragmentShader: waterFrag,
     });
@@ -379,31 +479,77 @@ export class World {
     const rockGeo = new THREE.IcosahedronGeometry(1, 0);
     // A gentler, flatter rock silhouette
     rockGeo.scale(1.15, 0.72, 0.95);
+    const grassGeo = buildGrassGeometry();
+    const bushGeo = buildBushGeometry();
 
     this.trunkMat = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true });
     this.leafMat = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true, side: THREE.DoubleSide });
+    this.leafUniforms = { time: { value: 0 }, strength: { value: 0.2 }, wind: { value: new THREE.Vector2(0.7, 0.4) } };
+    this.grassMat = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true, side: THREE.DoubleSide });
+    this.grassMat.onBeforeCompile = (shader) => {
+      shader.uniforms.uWindTime = this.leafUniforms.time;
+      shader.uniforms.uWindStrength = this.leafUniforms.strength;
+      shader.uniforms.uWindDir = this.leafUniforms.wind;
+      shader.vertexShader = 'uniform float uWindTime;\nuniform float uWindStrength;\nuniform vec2 uWindDir;\n' + shader.vertexShader;
+      shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>\n        #ifdef USE_INSTANCING\n          float gphase = instanceMatrix[3].x * 0.3 + instanceMatrix[3].z * 0.27;\n        #else\n          float gphase = 0.0;\n        #endif\n        float gsway = sin(uWindTime * 2.1 + gphase) * uWindStrength;\n        transformed.x += (uWindDir.x * gsway) * (0.15 + transformed.y * 0.18);\n        transformed.z += (uWindDir.y * gsway) * (0.15 + transformed.y * 0.18);\n      `);
+    };
+    this.leafMat.onBeforeCompile = (shader) => {
+      shader.uniforms.uWindTime = this.leafUniforms.time;
+      shader.uniforms.uWindStrength = this.leafUniforms.strength;
+      shader.uniforms.uWindDir = this.leafUniforms.wind;
+      shader.vertexShader = 'uniform float uWindTime;\nuniform float uWindStrength;\nuniform vec2 uWindDir;\nvarying vec3 vLeafWorld;\n' + shader.vertexShader;
+      shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+        #ifdef USE_INSTANCING
+          float leafPhase = instanceMatrix[3].x * 0.23 + instanceMatrix[3].z * 0.19;
+        #else
+          float leafPhase = 0.0;
+        #endif
+        float sway = sin(uWindTime * 1.7 + leafPhase) * uWindStrength;
+        float sway2 = cos(uWindTime * 2.3 + leafPhase * 1.4) * uWindStrength;
+        transformed.x += (uWindDir.x * sway + uWindDir.y * sway2) * (0.18 + transformed.y * 0.045);
+        transformed.z += (uWindDir.y * sway - uWindDir.x * sway2) * (0.18 + transformed.y * 0.045);
+        #ifdef USE_INSTANCING
+          vLeafWorld = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
+        #else
+          vLeafWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;
+        #endif
+      `);
+      shader.fragmentShader = 'varying vec3 vLeafWorld;\n' + shader.fragmentShader;
+      shader.fragmentShader = shader.fragmentShader.replace('#include <dithering_fragment>', '#include <dithering_fragment>\n        if (distance(vLeafWorld, cameraPosition) < 4.2) discard;\n      ');
+    };
     this.rockMat = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true });
+    this.bushMat = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true, side: THREE.DoubleSide });
 
     const opts = { instanceMatrix: { usage: THREE.DynamicDrawUsage }, frustumCulled: false };
     this.trunkMesh = new THREE.InstancedMesh(trunkGeo, this.trunkMat, 7000);
     this.coniferMesh = new THREE.InstancedMesh(coniferGeo, this.leafMat, 4500);
     this.broadleafMesh = new THREE.InstancedMesh(broadleafGeo, this.leafMat, 4500);
     this.rockMesh = new THREE.InstancedMesh(rockGeo, this.rockMat, 1500);
-    for (const m of [this.trunkMesh, this.coniferMesh, this.broadleafMesh, this.rockMesh]) {
+    this.grassMesh = new THREE.InstancedMesh(grassGeo, this.grassMat, 7000);
+    this.grassMesh.castShadow = false;
+    this.bushMesh = new THREE.InstancedMesh(bushGeo, this.bushMat, 2200);
+    this.bushMesh.castShadow = true;
+    this.bushMesh.receiveShadow = true;
+    for (const m of [this.trunkMesh, this.coniferMesh, this.broadleafMesh, this.rockMesh, this.grassMesh, this.bushMesh]) {
       m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       m.frustumCulled = false;
       m.count = 0;
-      m.receiveShadow = false;
+      m.castShadow = true;
+      m.receiveShadow = true;
       this.scene.add(m);
     }
     this.coniferMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(4500 * 3), 3);
     this.broadleafMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(4500 * 3), 3);
     this.trunkMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(7000 * 3), 3);
     this.rockMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(1500 * 3), 3);
+    this.grassMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(7000 * 3), 3);
+    this.bushMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(2200 * 3), 3);
     this.trunkMesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
     this.coniferMesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
     this.broadleafMesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
     this.rockMesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
+    this.grassMesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
+    this.bushMesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
   }
 
   _addChunk(cx, cz) {
@@ -414,7 +560,7 @@ export class World {
     mesh.position.set(cx * CHUNK_SIZE, 0, cz * CHUNK_SIZE);
     mesh.matrixAutoUpdate = false;
     mesh.updateMatrix();
-    mesh.receiveShadow = false;
+    mesh.receiveShadow = true;
     mesh.castShadow = false;
     mesh.frustumCulled = true;
     this.scene.add(mesh);
@@ -512,6 +658,17 @@ export class World {
     }
   }
 
+  _inStructureClearing(x, z, extra = 0) {
+    for (let i = 0; i < this.structureClearings.length; i++) {
+      const c = this.structureClearings[i];
+      const dx = x - c.x;
+      const dz = z - c.z;
+      const rr = c.r + extra;
+      if (dx * dx + dz * dz < rr * rr) return true;
+    }
+    return false;
+  }
+
   _rebuildPropsNow() {
     if (!this.trunkMesh) return;
     const focus = this._lastFocus;
@@ -521,6 +678,10 @@ export class World {
     let ci = 0;
     let bi = 0;
     let ri = 0;
+    let gi = 0;
+    let shi = 0;
+    const season = this.environment?.season ?? 2;
+    const snowCover = this.snowCover || 0;
     const maxDetail = DETAIL_RADIUS + 0.35;
     for (const chunk of this.chunks.values()) {
       const dx = chunk.cx - pcx;
@@ -529,6 +690,7 @@ export class World {
       const treeRng = mulberry32(hash2i(chunk.cx, chunk.cz, 1901));
       for (const tree of chunk.props.trees) {
         if (ti >= 7000) break;
+        if (this._inStructureClearing(tree.x, tree.z, 4)) continue;
         const species = tree.species;
         const s = tree.scale;
         _dummy.position.set(tree.x, tree.y, tree.z);
@@ -538,16 +700,13 @@ export class World {
         if (species === 0) {
           if (ci >= 4500) continue;
           this.coniferMesh.setMatrixAt(ci, _dummy.matrix);
-          _color.setHex(CONIFER_COLORS[Math.floor(tree.tint * CONIFER_COLORS.length)]);
-          _color.offsetHSL(0, 0.01 * (tree.tint - 0.5), (tree.tint - 0.5) * 0.04);
+          treeColor(tree, season, snowCover);
           this.coniferMesh.setColorAt(ci, _color);
           ci++;
         } else {
           if (bi >= 4500) continue;
           this.broadleafMesh.setMatrixAt(bi, _dummy.matrix);
-          const palette = tree.autumn ? AUTUMN_COLORS : BROADLEAF_COLORS;
-          _color.setHex(palette[Math.floor(tree.tint * palette.length)]);
-          _color.offsetHSL(0, 0.01 * (tree.tint - 0.5), (tree.tint - 0.5) * 0.05);
+          treeColor(tree, season, snowCover);
           this.broadleafMesh.setColorAt(bi, _color);
           bi++;
         }
@@ -562,6 +721,7 @@ export class World {
       }
       for (const rock of chunk.props.rocks) {
         if (ri >= 1500) break;
+        if (this._inStructureClearing(rock.x, rock.z, 2)) continue;
         _dummy.position.set(rock.x, rock.y, rock.z);
         _dummy.rotation.set((rock.tint - 0.5) * 0.3, rock.rot, (rock.tint - 0.5) * 0.2);
         _dummy.scale.set(rock.scale * 1.4, rock.scale * 0.75, rock.scale * 1.1);
@@ -571,12 +731,41 @@ export class World {
         this.rockMesh.setColorAt(ri, _color);
         ri++;
       }
+      const foliage = SEASON_FOLIAGE[season] || SEASON_FOLIAGE[2];
+      for (const g of chunk.props.grass || []) {
+        if (gi >= 7000) break;
+        if (this._inStructureClearing(g.x, g.z, 0)) continue;
+        _dummy.position.set(g.x, g.y + 0.06, g.z);
+        _dummy.rotation.set(0, g.rot, 0);
+        _dummy.scale.set(0.75 + g.tint * 0.65, g.scale, 0.75 + g.tint * 0.65);
+        _dummy.updateMatrix();
+        this.grassMesh.setMatrixAt(gi, _dummy.matrix);
+        _color.setHex(foliage.grass[Math.floor(g.tint * foliage.grass.length)]);
+        if (snowCover > 0.02) _color.lerp(SNOW_TINT, Math.min(0.65, snowCover * 0.35));
+        this.grassMesh.setColorAt(gi, _color);
+        gi++;
+      }
+      for (const bush of chunk.props.bushes || []) {
+        if (shi >= 2200) break;
+        if (this._inStructureClearing(bush.x, bush.z, 1)) continue;
+        _dummy.position.set(bush.x, bush.y, bush.z);
+        _dummy.rotation.set(0, bush.rot, 0);
+        _dummy.scale.setScalar(bush.scale);
+        _dummy.updateMatrix();
+        this.bushMesh.setMatrixAt(shi, _dummy.matrix);
+        _color.setHex(foliage.bush[Math.floor(bush.tint * foliage.bush.length)]);
+        if (snowCover > 0.02) _color.lerp(SNOW_TINT, Math.min(0.6, snowCover * 0.32));
+        this.bushMesh.setColorAt(shi, _color);
+        shi++;
+      }
     }
     this.trunkMesh.count = ti;
     this.coniferMesh.count = ci;
     this.broadleafMesh.count = bi;
     this.rockMesh.count = ri;
-    for (const m of [this.trunkMesh, this.coniferMesh, this.broadleafMesh, this.rockMesh]) {
+    this.grassMesh.count = gi;
+    this.bushMesh.count = shi;
+    for (const m of [this.trunkMesh, this.coniferMesh, this.broadleafMesh, this.rockMesh, this.grassMesh, this.bushMesh]) {
       m.instanceMatrix.needsUpdate = true;
       if (m.instanceColor) m.instanceColor.needsUpdate = true;
     }
@@ -588,9 +777,34 @@ export class World {
     const fog = this.scene.fog;
     fog.near = lerp(fog.near, this.fogNearTarget, 1 - Math.exp(-1.4 * dt));
     fog.far = lerp(fog.far, this.fogFarTarget, 1 - Math.exp(-1.4 * dt));
+    if (this.fogColorTarget) fog.color.lerp(this.fogColorTarget, 1 - Math.exp(-1.2 * dt));
     this.waterMaterial.uniforms.uFogNear.value = fog.near;
     this.waterMaterial.uniforms.uFogFar.value = fog.far;
     this.waterMaterial.uniforms.uFogColor.value.copy(fog.color);
+  }
+
+  setWind(strength, yaw = 0.8) {
+    this.windStrength = strength;
+    if (!this.leafUniforms) return;
+    this.leafUniforms.strength.value = strength * 0.38;
+    this.leafUniforms.wind.value.set(Math.sin(yaw), Math.cos(yaw));
+    this.leafUniforms.time.value = this.time;
+  }
+
+  setSeason(season, snow = 0) {
+    const nextSeason = season | 0;
+    const seasonalChange = nextSeason !== this.season;
+    const snowChange = Math.abs(snow - this.snowCover) > 0.18;
+    if (!seasonalChange && !snowChange) return;
+    this.season = nextSeason;
+    this.snowCover = snow;
+    if (this.terrainUniforms) {
+      this.terrainUniforms.season.value = nextSeason;
+      this.terrainUniforms.snow.value = snow;
+    }
+    this.propsDirty = true;
+    this.lastPropsBuild = -1;
+    this._rebuildPropsNow();
   }
 
   _updateClouds(dt, time, camera) {
@@ -622,6 +836,9 @@ export class World {
   }
 
   update(dt, time, focusPos, camera, mode = this.mode, gameplay = true) {
+    this.time = time;
+    this._lastFocus.copy(focusPos);
+    if (this.environment) this.environment.update(dt, time, focusPos, camera, mode);
     if (this.lights?.hero) {
       // Keep a soft fill on the camera side of the dragon.
       this.lights.hero.position.copy(camera.position);
@@ -634,34 +851,46 @@ export class World {
       this.charLight.position.y += 2;
       this.charLight.intensity = mode === 'menu' ? 680 : 560;
     }
-    this.time = time;
-    this._lastFocus.copy(focusPos);
+    this.spawnPoint = focusPos;
     this._updateFog(dt);
     this._generateNearby(focusPos);
     if (this.propsDirty && time - this.lastPropsBuild > 0.25) this._rebuildPropsNow();
     this._updateClouds(dt, time, camera);
     this.sky.update(camera, time);
+    if (this.leafUniforms) this.leafUniforms.time.value = time;
     this.waterMaterial.uniforms.uTime.value = time;
+    this.waterMaterial.uniforms.uSkyColor.value.copy(this.environment.colors.horizon);
     this.waterMesh.position.x = camera.position.x;
     this.waterMesh.position.z = camera.position.z;
     this.effects.update(dt);
-    let soulHit = null;
-    let ringHit = null;
-    if (gameplay) {
-      soulHit = this.souls.update(dt, time, focusPos);
-      ringHit = this.rings.update(dt, time, focusPos);
-    }
-    return { soulHit, ringHit };
+    if (this.structures) { this.structures.update(focusPos, camera); this.structures.updateSmoke(dt, time); }
+    return {};
   }
 
   setGameplayVisible(visible) {
-    this.souls.setVisible(visible);
-    this.rings.setVisible(visible);
+    this.wildlife.setVisible(visible);
   }
 
-  resetCollectibles() {
-    this.souls.reset();
-    this.rings.reset();
+  resetCreatures() {
+    this.wildlife.reset(this.spawnPoint || this.spawn);
+  }
+
+  applyTerrainEdit(x, z, radius, amount, kind = 'raise') {
+    addTerrainEdit(x, z, radius, amount, kind);
+    const cs = CHUNK_SIZE;
+    const affected = [];
+    for (const [key, chunk] of [...this.chunks]) {
+      const dx = (chunk.cx + 0.5) * cs - x;
+      const dz = (chunk.cz + 0.5) * cs - z;
+      if (Math.hypot(dx, dz) > radius + cs * 1.1) continue;
+      affected.push([chunk.cx, chunk.cz]);
+      this._removeChunk(key);
+    }
+    // Rebuild touched chunks immediately so the crater/mound is visible at once.
+    for (const [cx, cz] of affected) this._addChunk(cx, cz);
+    this.propsDirty = true;
+    this.lastPropsBuild = -1;
+    this._rebuildPropsNow();
   }
 
   sampleRegion(pos) {
@@ -669,10 +898,6 @@ export class World {
       this.biomeCache = { t: this.time, data: regionAt(pos.x, pos.z) };
     }
     return this.biomeCache.data;
-  }
-
-  setPickupRadius(r) {
-    this.souls.pickupRadius = r;
   }
 
   addPlayerTrails(rig, accent, speed, dt, flapPulse = 0, state = null) {

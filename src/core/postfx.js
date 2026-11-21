@@ -18,6 +18,9 @@ const fragmentShader = /* glsl */`
   uniform float uSpeed;
   uniform float uFlash;
   uniform float uWarmth;
+  uniform float uUnderwater;
+  uniform float uNight;
+  uniform float uRain;
 
   vec3 toSRGB(vec3 c) {
     return pow(max(c, vec3(0.0)), vec3(0.454545));
@@ -46,6 +49,14 @@ const fragmentShader = /* glsl */`
     float bright = max(0.0, dot(max(c, max(n, n2)), vec3(0.3, 0.58, 0.12)) - 0.74);
     c += bright * vec3(1.0, 0.64, 0.3) * 0.18;
 
+    // underwater grade and shimmering caustic bands
+    if (uUnderwater > 0.001) {
+      float caust = sin(uv.x * 74.0 + uTime * 1.3) * sin(uv.y * 93.0 - uTime * 1.7);
+      float caust2 = sin((uv.x + uv.y) * 51.0 - uTime * 0.8);
+      c *= mix(vec3(1.0), vec3(0.52, 0.88, 1.04), uUnderwater);
+      c += vec3(0.02, 0.08, 0.11) * uUnderwater * (0.5 + 0.5 * caust + 0.25 * caust2);
+    }
+    c = mix(c, c * vec3(0.72, 0.84, 1.04), uNight * 0.25);
     vec3 srgb = toSRGB(c);
 
     // warm highlights, cool shadows — a unified dusk grade for all dragons
@@ -64,6 +75,7 @@ const fragmentShader = /* glsl */`
     // CRT / print vignette, with a faint warm glow at the horizon
     float vig = smoothstep(0.86, 0.2, radius);
     srgb *= mix(0.77, 1.0, vig);
+    srgb *= 1.0 - uRain * 0.12;
     float scan = 1.0 - 0.016 * (0.5 + 0.5 * sin(gl_FragCoord.y * 3.14159));
     srgb *= scan;
 
@@ -116,6 +128,9 @@ export class PixelPipeline {
         uSpeed: { value: 0 },
         uFlash: { value: 0 },
         uWarmth: { value: 1 },
+        uUnderwater: { value: 0 },
+        uNight: { value: 0 },
+        uRain: { value: 0 },
       },
       vertexShader,
       fragmentShader,
@@ -151,6 +166,9 @@ export class PixelPipeline {
     this.material.uniforms.uSpeed.value = effects.speed ?? 0;
     this.material.uniforms.uFlash.value = effects.flash ?? 0;
     this.material.uniforms.uWarmth.value = effects.warmth ?? 1;
+    this.material.uniforms.uUnderwater.value = effects.underwater ?? 0;
+    this.material.uniforms.uNight.value = effects.night ?? 0;
+    this.material.uniforms.uRain.value = effects.rain ?? 0;
     renderer.setRenderTarget(this.target);
     renderer.clear();
     renderer.render(scene, camera);

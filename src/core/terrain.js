@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import {
   fbm2, ridged2, valueNoise2, hash2i, smoothstep, lerp, clamp, mulberry32,
 } from './noise.js';
+import { sampleTerrainEdits } from './terrain-edits.js';
 
 export const WORLD_SEED = 20261121;
 export const CHUNK_SIZE = 112;
@@ -16,7 +17,7 @@ const S = WORLD_SEED;
 // The world is one continuous height field. These frequencies are laid out in
 // physical metres: a mountain range is roughly 1.2 km across, a river ~600 m
 // between bends, and a coastline ~6 km.
-export function heightAt(x, z) {
+function baseHeightAt(x, z) {
   const w1 = fbm2(x * 0.00034 + 13.7, z * 0.00034 - 6.2, 2, S + 1);
   const w2 = fbm2(x * 0.00034 - 8.4, z * 0.00034 + 17.9, 2, S + 2);
   const wx = x + w1 * 160;
@@ -63,6 +64,14 @@ export function heightAt(x, z) {
   h += terrace * 5.5 * shelf * (1 - mountainMask);
 
   return h;
+}
+
+export function heightAt(x, z) {
+  return sampleTerrainEdits(x, z, baseHeightAt(x, z));
+}
+
+export function baseTerrainHeightAt(x, z) {
+  return baseHeightAt(x, z);
 }
 
 export function slopeAt(x, z, step = 4) {
@@ -281,6 +290,7 @@ function generateProps(cx, cz, heights, gridN) {
   const trees = [];
   const rocks = [];
   const grass = [];
+  const bushes = [];
 
   const treeAttempts = 108;
   for (let k = 0; k < treeAttempts; k++) {
@@ -330,18 +340,37 @@ function generateProps(cx, cz, heights, gridN) {
     });
   }
 
-  for (let k = 0; k < 16; k++) {
+  for (let k = 0; k < 62; k++) {
     const lx = rng() * CHUNK_SIZE;
     const lz = rng() * CHUNK_SIZE;
     const x = ox + lx;
     const z = oz + lz;
     const h = quantizeHeight(heightAt(x, z));
-    if (h < 1.4 || h > 46) continue;
-    if (moistureAt(x, z) < -0.24) continue;
-    grass.push({ x, z, y: h, scale: 0.8 + rng() * 1.5, rot: rng() * Math.PI });
+    if (h < 1.2 || h > 52) continue;
+    if (moistureAt(x, z) < -0.3) continue;
+    const slope = Math.abs(heightAt(x + 3, z) - heightAt(x - 3, z)) / 6 +
+      Math.abs(heightAt(x, z + 3) - heightAt(x, z - 3)) / 6;
+    if (slope > 1.25) continue;
+    if (grass.length >= 40) break;
+    grass.push({ x, z, y: h, scale: 0.65 + rng() * 1.4, rot: rng() * Math.PI * 2, tint: rng() });
   }
 
-  return { trees, rocks, grass };
+  for (let k = 0; k < 18; k++) {
+    const lx = rng() * CHUNK_SIZE;
+    const lz = rng() * CHUNK_SIZE;
+    const x = ox + lx;
+    const z = oz + lz;
+    const h = quantizeHeight(heightAt(x, z));
+    if (h < 2.5 || h > 44) continue;
+    if (moistureAt(x, z) < -0.18) continue;
+    const slope = Math.abs(heightAt(x + 3, z) - heightAt(x - 3, z)) / 6 +
+      Math.abs(heightAt(x, z + 3) - heightAt(x, z - 3)) / 6;
+    if (slope > 1.0) continue;
+    if (bushes.length >= 9) break;
+    bushes.push({ x, z, y: h - 0.1, scale: 0.7 + rng() * 1.45, rot: rng() * Math.PI * 2, tint: rng() });
+  }
+
+  return { trees, rocks, grass, bushes };
 }
 
 // ── places & lore ─────────────────────────────────────────────────────────

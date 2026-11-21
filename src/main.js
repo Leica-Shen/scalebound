@@ -31,7 +31,8 @@ renderer.setPixelRatio(1);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.NeutralToneMapping;
 renderer.toneMappingExposure = 1.5;
-renderer.shadowMap.enabled = false;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.autoClear = true;
 
 const scene = new THREE.Scene();
@@ -42,6 +43,7 @@ const pipeline = new PixelPipeline(renderer);
 const ui = new UI(DRAGONS);
 const audio = new AudioEngine();
 const world = new World(scene);
+world.renderer = renderer;
 
 function resize() {
   const w = window.innerWidth;
@@ -61,12 +63,14 @@ const game = new Game({
   ui,
   audio,
   catalog: DRAGONS,
+  renderer,
 });
 ui.setSoundEnabled(game.soundEnabled);
 
 window.__SCALEBOUND__ = {
   game, world, ui, audio, scene, camera, renderer, pipeline,
   ready: false,
+  THREE,
   finishIntro: () => game.finishIntro(),
   start: () => game.startRun(),
   state: () => game.debugState(),
@@ -87,7 +91,7 @@ function frame(now) {
 const LOADING_LINES = [
   [0.0, '铺 展 山 海 骨 骼'],
   [0.22, '唤 醒 河 川 与 风'],
-  [0.48, '点 亮 九 曜 龙 魂'],
+  [0.48, '点 亮 九 曜 龙 契'],
   [0.72, '展 开 无 界 长 天'],
   [0.9, '缔 结 龙 契 中'],
 ];
@@ -115,7 +119,7 @@ async function boot() {
     ui.setLoading(progress, loadingStatus(progress));
   });
 
-  ui.setLoading(0.9, '点 亮 九 曜 龙 魂');
+  ui.setLoading(0.9, '点 亮 九 曜 龙 契');
   // Let the browser paint the loader before the dragon rig is assembled.
   await wait(40);
   game._placeMenuCameraImmediate();

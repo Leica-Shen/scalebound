@@ -132,11 +132,20 @@ export class DragonAnimator {
     this.flapEnergy = Math.max(0, this.flapEnergy - dt * (showcase ? 0.24 : 1.22));
     this.flapImpulse = Math.max(0, this.flapImpulse - dt * 2.8);
     const activeBeat = this.flapEnergy > 0.06;
-    if (activeBeat) {
-      this.wingPhase += dt * (5.6 + this.flapEnergy * 1.8 + speedNorm * 0.8);
-    } else {
-      this.wingPhase += dt * (showcase ? 1.5 : 0.85);
-    }
+    const isCloud = cfg.wing.sail === false;
+    const pose = state.pose || 'flight';
+    const gliding = !showcase && pose === 'flight' && speedNorm > 0.9 && ss.climb < 0.12 && !activeBeat;
+
+    // Flight always breathes through the wings. Even at cruise the dragon beats
+    // automatically; SPACE layers a deeper, audible power stroke on top.
+    const autoStrength = showcase ? 0 : clamp(
+      0.23 + (1 - clamp(speedNorm, 0, 1.35)) * 0.16 + Math.max(0, ss.climb) * 0.19 +
+      (gliding ? -0.10 : 0) + ss.boost * 0.08,
+      0.10, 0.55,
+    );
+    const beatRate = showcase ? 1.45 : (isCloud ? 2.35 : 4.55 + speedNorm * 1.15 + Math.max(0, ss.climb) * 1.9 + (activeBeat ? 2.2 : 0));
+    const prevBeat = Math.sin(this.wingPhase);
+    this.wingPhase += dt * beatRate;
     const osc = Math.sin(this.wingPhase);
     const oscLagA = Math.sin(this.wingPhase - 0.56);
     const oscLagB = Math.sin(this.wingPhase - 1.1);
@@ -144,12 +153,19 @@ export class DragonAnimator {
     const downStroke = Math.max(0, -osc);
     const idle = Math.sin(t * (showcase ? 1.6 : 1.15));
     const energy = this.flapEnergy;
+    if (!showcase && prevBeat > 0 && osc <= 0) {
+      // one downstroke signal per beat, used by the controller for a soft lift
+      if (this.onFlapDown) this.onFlapDown();
+    }
 
+    const autoWing = isCloud
+      ? Math.sin(this.wingPhase * 0.55 + 0.4) * 0.10
+      : osc * autoStrength;
     const flapAmplitude = 0.48 + energy * 0.42;
+    const powerWing = activeBeat ? (upStroke * 0.70 - downStroke * 0.27) * flapAmplitude : 0;
     const wingLift = showcase
       ? -0.105 + Math.sin(t * 0.85) * 0.055 + Math.sin(t * 0.33 + 1.2) * 0.018
-      : (0.045 + idle * 0.02) +
-        (activeBeat ? (upStroke * 0.78 - downStroke * 0.32) * flapAmplitude : idle * 0.024);
+      : 0.045 + autoWing + powerWing;
     const catchDrag = ss.brake * 0.28 + ss.stall * 0.12;
     const sweep = ss.speed * 0.14 + ss.boost * 0.08 + catchDrag;
     const twist = ss.turn * 0.09;
@@ -157,29 +173,66 @@ export class DragonAnimator {
     for (const w of rig.wings) {
       const s = w.side;
       const sideBank = -s * ss.turn * 0.04;
-      w.root.rotation.z = w.baseRootZ + s * (wingLift + roar * 0.16 + sideBank);
-      w.root.rotation.y = w.baseRootY + s * sweep;
-      w.root.rotation.x = -0.035 - Math.abs(ss.turn) * 0.02 + downStroke * 0.028 * energy;
-      const lagA = showcase ? Math.sin(t * 0.85 - 0.6) * 0.035 : (activeBeat ? oscLagA * 0.17 * flapAmplitude : idle * 0.014);
-      const lagB = showcase ? Math.sin(t * 0.85 - 1.1) * 0.055 : (activeBeat ? oscLagB * 0.26 * flapAmplitude : idle * 0.02);
-      w.mid.rotation.z = w.baseMidZ + s * (lagA + ss.turn * twist * 0.5);
-      w.tip.rotation.z = w.baseTipZ + s * (lagB + ss.turn * twist * 0.7);
-      w.mid.rotation.y = -s * (sweep * 0.28 + ss.brake * 0.16);
-      w.tip.rotation.y = -s * (sweep * 0.15 + ss.brake * 0.1);
-      w.mid.rotation.x = downStroke * 0.035 * energy;
-      w.tip.rotation.x = -0.02 + upStroke * 0.04 * energy;
+      let rootX;
+      let rootY;
+      let rootZ;
+      let midY;
+      let midZ;
+      let tipY;
+      let tipZ;
+      let midX;
+      let tipX;
+      if (pose === 'landed' || pose === 'swim') {
+        // Fold the wings back against the flanks when resting or floating.
+        const breathe = Math.sin(t * 0.9) * 0.014;
+        const settle = pose === 'landed' ? 1 : 0.62;
+        rootX = -0.04;
+        rootY = w.baseRootY + s * (0.92 * settle + 0.02);
+        rootZ = w.baseRootZ + s * (0.015 * settle + breathe * 0.5);
+        midY = s * (0.52 * settle);
+        midZ = w.baseMidZ + s * (0.1 * settle + breathe * 0.35);
+        tipY = s * (0.42 * settle);
+        tipZ = w.baseTipZ + s * (0.16 * settle + breathe * 0.3);
+        midX = -0.03;
+        tipX = -0.05;
+      } else {
+        rootZ = w.baseRootZ + s * (wingLift + roar * 0.16 + sideBank);
+        rootY = w.baseRootY + s * sweep;
+        rootX = -0.035 - Math.abs(ss.turn) * 0.02 + downStroke * 0.028 * energy + osc * 0.022 * autoStrength;
+        const autoLagA = isCloud ? Math.sin(this.wingPhase * 0.55 - 0.3) * 0.05 : oscLagA * autoStrength * 0.42;
+        const autoLagB = isCloud ? Math.sin(this.wingPhase * 0.55 - 0.8) * 0.08 : oscLagB * autoStrength * 0.65;
+        const lagA = showcase ? Math.sin(t * 0.85 - 0.6) * 0.035 : autoLagA + (activeBeat ? oscLagA * 0.17 * flapAmplitude : 0);
+        const lagB = showcase ? Math.sin(t * 0.85 - 1.1) * 0.055 : autoLagB + (activeBeat ? oscLagB * 0.26 * flapAmplitude : 0);
+        midZ = w.baseMidZ + s * (lagA + ss.turn * twist * 0.5);
+        tipZ = w.baseTipZ + s * (lagB + ss.turn * twist * 0.7);
+        midY = -s * (sweep * 0.28 + ss.brake * 0.16 + (isCloud ? 0.04 : 0));
+        tipY = -s * (sweep * 0.15 + ss.brake * 0.1 + (isCloud ? 0.06 : 0));
+        midX = downStroke * 0.035 * (energy + autoStrength * 0.3);
+        tipX = -0.02 + upStroke * 0.04 * (energy + autoStrength * 0.35);
+      }
+      const rate = pose === 'landed' || pose === 'swim' ? 3.2 : 12;
+      w.root.rotation.x = damp(w.root.rotation.x, rootX, rate, dt);
+      w.root.rotation.y = damp(w.root.rotation.y, rootY, rate, dt);
+      w.root.rotation.z = damp(w.root.rotation.z, rootZ, rate, dt);
+      w.mid.rotation.x = damp(w.mid.rotation.x, midX, rate, dt);
+      w.mid.rotation.y = damp(w.mid.rotation.y, midY, rate, dt);
+      w.mid.rotation.z = damp(w.mid.rotation.z, midZ, rate, dt);
+      w.tip.rotation.x = damp(w.tip.rotation.x, tipX, rate, dt);
+      w.tip.rotation.y = damp(w.tip.rotation.y, tipY, rate, dt);
+      w.tip.rotation.z = damp(w.tip.rotation.z, tipZ, rate, dt);
     }
 
     // ── body bob, breathing, bank ──────────────────────────────────────────
     const breath = Math.sin(t * 1.25 + 0.4);
-    const flapLift = activeBeat ? Math.sin(this.wingPhase - 0.8) * 0.11 * energy : 0;
+    const flapLift = activeBeat ? Math.sin(this.wingPhase - 0.8) * 0.11 * energy : Math.sin(this.wingPhase - 0.8) * 0.028 * autoStrength;
     this.bodyLift = damp(this.bodyLift, flapLift, 9, dt);
     const hover = showcase ? Math.sin(t * 0.9) * 0.08 : 0;
     rig.inner.position.y = this.bodyLift + hover + breath * 0.022 - ss.stall * 0.06;
     rig.inner.position.x = 0;
     rig.inner.rotation.z = -ss.turn * 0.028 + Math.sin(this.wingPhase) * 0.015 * energy;
     rig.inner.rotation.x = -ss.pitch * 0.012 + Math.sin(t * 0.8) * 0.006;
-    rig.inner.rotation.y = -ss.turn * 0.055;
+    const easternWave = rig.archetype === 'eastern' ? Math.sin(t * 1.05) * 0.022 + Math.sin(this.wingPhase * 0.5) * 0.012 : 0;
+    rig.inner.rotation.y = -ss.turn * 0.055 + easternWave;
     if (rig.bodyGroup) {
       rig.bodyGroup.scale.set(1 + breath * 0.012, 1 + Math.abs(breath) * 0.008, 1 + breath * 0.006);
     }
@@ -198,7 +251,7 @@ export class DragonAnimator {
       const tFrac = nCount <= 1 ? 0 : i / (nCount - 1);
       const breathSway = Math.sin(t * 1.1 + i * 0.42) * 0.006;
       seg.rotation.x = rig.neckBaseX[i] - roar * 0.05 * (0.35 + tFrac) - headCounter * 0.12 * (1 - tFrac * 0.5) + breathSway;
-      seg.rotation.y = (lookSway * 0.22 + ss.lookYaw * 0.22) * (0.25 + tFrac * 0.6) + Math.sin(t * 0.7 + i * 0.3) * 0.006;
+      seg.rotation.y = (lookSway * 0.22 + ss.lookYaw * 0.22) * (0.25 + tFrac * 0.6) + Math.sin(t * 0.7 + i * 0.3) * 0.006 + (rig.archetype === 'eastern' ? Math.sin(t * 0.9 - i * 0.25) * 0.018 : 0);
       seg.rotation.z = -ss.roll * 0.022 * (0.4 + tFrac);
     }
     if (rig.head) {
@@ -248,27 +301,55 @@ export class DragonAnimator {
       if (eh.jaw) eh.jaw.rotation.x = Math.sin(t * 0.27 + hi * 1.7) * 0.035 + roar * 0.22 + ss.boost * 0.02;
     }
 
-    // ── legs: tuck, sway, and claw articulation ───────────────────────────
+    // ── legs: active tuck, wing-driven pump, planted stance and paddling ──
     for (const leg of rig.legs) {
       const front = leg.front;
       const side = leg.side;
-      const flightTuck = clamp(0.5 + ss.speed * 0.95 + ss.boost * 0.18, 0, 1);
+      const phase = (front ? 0 : 1.55) + (side > 0 ? 0.36 : -0.14);
+      const isEastern = rig.archetype === 'eastern';
+      const flightTuck = clamp(0.52 + ss.speed * 0.92 + ss.boost * 0.18, 0, 1);
       const tuck = showcase ? 1 : flightTuck;
-      const targetRoot = 1.25 + (front ? 0.02 : 0.16);
-      const targetKnee = -1.95 - (front ? 0.12 : 0.22);
-      const targetAnkle = 1.48;
-      const pump = activeBeat ? Math.sin(this.wingPhase - 0.25) * 0.06 * energy : 0;
-      const spread = Math.sin(t * 0.8 + (front ? 0 : 1.4) + side) * 0.015;
-      leg.root.rotation.x = lerp(leg.baseX, targetRoot, tuck) + pump + Math.sin(t * 0.9 + (front ? 0 : 1)) * 0.015;
-      leg.root.rotation.z = leg.baseZ + side * (0.02 + Math.abs(ss.turn) * 0.06) + spread;
-      leg.knee.rotation.x = lerp(leg.baseKneeX, targetKnee, tuck) + pump * 0.5;
-      leg.ankle.rotation.x = lerp(leg.baseAnkleX, targetAnkle, tuck) - pump * 0.7;
-      leg.foot.rotation.x = -0.05 + Math.sin(t * 1.25 + front * 2.1 + side) * 0.025;
-      leg.foot.rotation.y = side * 0.03;
+      const pump = Math.sin(this.wingPhase + phase) * (0.035 + Math.max(0, 1 - ss.speed) * 0.03 + autoStrength * 0.045);
+      const spread = Math.sin(t * 0.8 + phase) * 0.018 + side * Math.abs(ss.turn) * 0.035;
+      let rootTarget;
+      let kneeTarget;
+      let ankleTarget;
+      let footTarget;
+      let rate = 5.0;
+      if (pose === 'landed') {
+        // Planted: elbows open, wrists settle, weight shifts slowly between feet.
+        const settle = Math.sin(t * 0.8 + phase) * 0.022;
+        rootTarget = leg.baseX + (front ? -0.04 : 0.06) + settle;
+        kneeTarget = leg.baseKneeX + (front ? 0.08 : -0.08) + settle * 0.5;
+        ankleTarget = leg.baseAnkleX - 0.04 - settle * 0.4;
+        footTarget = -0.05 + Math.sin(t * 0.6 + phase) * 0.018;
+        rate = 3.2;
+      } else if (pose === 'swim') {
+        const paddle = Math.sin(t * 3.1 + phase) * 0.34;
+        rootTarget = leg.baseX + paddle;
+        kneeTarget = leg.baseKneeX - 0.18 + paddle * 0.5;
+        ankleTarget = leg.baseAnkleX + 0.22 - paddle * 0.35;
+        footTarget = -0.08 + Math.sin(t * 3.1 + phase + 1) * 0.08;
+        rate = 6.0;
+      } else {
+        const targetRoot = (isEastern ? 1.44 : 1.20) + (front ? 0.02 : 0.18);
+        const targetKnee = (isEastern ? -2.22 : -1.92) - (front ? 0.10 : 0.22);
+        const targetAnkle = (isEastern ? 1.65 : 1.42);
+        rootTarget = lerp(leg.baseX, targetRoot, tuck) + pump + Math.sin(t * 0.9 + phase) * 0.02;
+        kneeTarget = lerp(leg.baseKneeX, targetKnee, tuck) + pump * 0.65;
+        ankleTarget = lerp(leg.baseAnkleX, targetAnkle, tuck) - pump * 0.9;
+        footTarget = -0.04 + Math.sin(t * 1.35 + phase) * 0.035 + ss.turn * side * 0.02;
+      }
+      leg.root.rotation.x = damp(leg.root.rotation.x, rootTarget, rate, dt);
+      leg.root.rotation.z = damp(leg.root.rotation.z, leg.baseZ + side * (0.02 + Math.abs(ss.turn) * 0.06) + spread, 4.5, dt);
+      leg.knee.rotation.x = damp(leg.knee.rotation.x, kneeTarget, rate, dt);
+      leg.ankle.rotation.x = damp(leg.ankle.rotation.x, ankleTarget, rate, dt);
+      leg.foot.rotation.x = damp(leg.foot.rotation.x, footTarget, rate, dt);
+      leg.foot.rotation.y = damp(leg.foot.rotation.y, side * 0.03 + Math.sin(t * 1.1 + phase) * 0.02, 4, dt);
     }
 
     // ── tail: a travelling wave, slower and broader on turns ───────────────
-    const tailAmp = 0.055 + (1 - Math.min(1, ss.speed)) * 0.055 + ss.stall * 0.06 + showcase * 0.025;
+    const tailAmp = (rig.archetype === 'eastern' ? 0.08 : 0.055) + (1 - Math.min(1, ss.speed)) * 0.055 + ss.stall * 0.06 + showcase * 0.025;
     const tailClock = t * (2.4 + ss.speed * 2.2);
     for (let i = 0; i < rig.tail.length; i++) {
       const seg = rig.tail[i];
