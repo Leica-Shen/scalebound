@@ -33,6 +33,15 @@ export class UI {
       startBtn: $('startBtn'),
       audioBtn: $('audioBtn'),
       hudAudioBtn: $('hudAudioBtn'),
+      hudFocusBtn: $('hudFocusBtn'),
+      hudAutoBtn: $('hudAutoBtn'),
+      betaFlag: $('betaFlag'),
+      combatPanel: $('combatPanel'),
+      combatTargetName: $('combatTargetName'),
+      combatPlayerBar: $('combatPlayerBar'),
+      combatPlayerHp: $('combatPlayerHp'),
+      combatTargetBar: $('combatTargetBar'),
+      combatTargetHp: $('combatTargetHp'),
       helpBtn: $('helpBtn'),
       prevBtn: $('prevBtn'),
       nextBtn: $('nextBtn'),
@@ -146,6 +155,40 @@ export class UI {
     this.el.mapWeather.textContent = '晴 · 18°';
   }
 
+  setBeta(on) {
+    document.documentElement.classList.toggle('is-beta', !!on);
+    [this.el.betaFlag, this.el.hudAutoBtn, ...document.querySelectorAll('.beta-only')].forEach((el) => el?.classList.toggle('is-hidden', !on));
+    if (!on) this.el.combatPanel?.classList.add('is-hidden');
+  }
+
+  setAutoFlight(on) {
+    this.el.hudAutoBtn?.classList.toggle('is-active', !!on);
+    if (this.el.hudAutoBtn) this.el.hudAutoBtn.title = on ? '自动飞行：开 (B)' : '自动飞行：关 (B)';
+  }
+
+  setCombatState({ health = 100, target = null, auto = false } = {}) {
+    const panel = this.el.combatPanel;
+    if (!panel) return;
+    const show = document.documentElement.classList.contains('is-beta') && (auto || !!target);
+    panel.classList.toggle('is-hidden', !show);
+    if (!show) return;
+    const hp = Math.max(0, Math.round(health));
+    this.el.combatPlayerBar.style.width = `${hp}%`;
+    this.el.combatPlayerHp.textContent = String(hp);
+    this.el.combatTargetName.textContent = target ? `${target.name} · ${Math.round(target.distance)}m` : '无目标 · X 锁定';
+    this.el.combatTargetBar.style.width = target ? `${Math.max(0, Math.round(target.hp / target.maxHp * 100))}%` : '0%';
+    this.el.combatTargetHp.textContent = target ? String(Math.max(0, Math.round(target.hp))) : '--';
+  }
+
+  setFocusMode(on) {
+    this.el.hud.classList.toggle('is-focus', !!on);
+    if (this.el.hudFocusBtn) {
+      this.el.hudFocusBtn.classList.toggle('is-active', !!on);
+      this.el.hudFocusBtn.style.opacity = on ? '1' : '';
+      this.el.hudFocusBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    }
+  }
+
   setCallbacks(callbacks) {
     this.callbacks = { ...this.callbacks, ...callbacks };
   }
@@ -159,6 +202,8 @@ export class UI {
     this.el.startBtn.addEventListener('click', () => this._emit('onStart'));
     this.el.audioBtn.addEventListener('click', () => this._emit('onToggleAudio'));
     this.el.hudAudioBtn.addEventListener('click', () => this._emit('onToggleAudio'));
+    this.el.hudFocusBtn?.addEventListener('click', () => this._emit('onToggleHudFocus'));
+    this.el.hudAutoBtn?.addEventListener('click', () => this._emit('onToggleAutoFlight'));
     this.el.helpBtn.addEventListener('click', () => this._emit('onHelpRequested'));
     this.el.prevBtn.addEventListener('click', () => this._emit('onCycle', -1));
     this.el.nextBtn.addEventListener('click', () => this._emit('onCycle', 1));

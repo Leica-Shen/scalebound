@@ -352,6 +352,8 @@ export class World {
     this.season = -1;
     this.snowCover = 0;
     this.structureClearings = [];
+    this.treeRecords = [];
+    this.burnedTrees = new Set();
     this.windStrength = 0.2;
     this.fogNearTarget = 300;
     this.fogFarTarget = 900;
@@ -697,17 +699,23 @@ export class World {
         _dummy.rotation.set(tree.tilt, tree.rot, tree.tilt * 0.7);
         _dummy.scale.setScalar(s);
         _dummy.updateMatrix();
+        const burnKey = `${Math.round(tree.x * 10)}:${Math.round(tree.z * 10)}`;
+        const burned = this.burnedTrees.has(burnKey);
         if (species === 0) {
           if (ci >= 4500) continue;
           this.coniferMesh.setMatrixAt(ci, _dummy.matrix);
           treeColor(tree, season, snowCover);
+          if (burned) _color.setHex(0x2c2922).offsetHSL(0.04, 0.05, (tree.tint - 0.5) * 0.05);
           this.coniferMesh.setColorAt(ci, _color);
+          this.treeRecords.push({ mesh: this.coniferMesh, index: ci, x: tree.x, z: tree.z, top: tree.y + 8.2 * s, scale: s, key: burnKey, species });
           ci++;
         } else {
           if (bi >= 4500) continue;
           this.broadleafMesh.setMatrixAt(bi, _dummy.matrix);
           treeColor(tree, season, snowCover);
+          if (burned) _color.setHex(0x302b22).offsetHSL(0.03, 0.04, (tree.tint - 0.5) * 0.05);
           this.broadleafMesh.setColorAt(bi, _color);
+          this.treeRecords.push({ mesh: this.broadleafMesh, index: bi, x: tree.x, z: tree.z, top: tree.y + 7.0 * s, scale: s, key: burnKey, species });
           bi++;
         }
         _dummy.position.y = tree.y;
@@ -771,6 +779,25 @@ export class World {
     }
     this.propsDirty = false;
     this.lastPropsBuild = this.time;
+  }
+
+  igniteTreesAt(x, z, radius) {
+    const hit = [];
+    const max = 18;
+    const r2 = radius * radius;
+    for (const t of this.treeRecords) {
+      if (hit.length >= max) break;
+      if (this.burnedTrees.has(t.key)) continue;
+      const dx = t.x - x, dz = t.z - z;
+      if (dx * dx + dz * dz > r2) continue;
+      this.burnedTrees.add(t.key);
+      t.mesh.setColorAt(t.index, _color.setHex(t.species === 0 ? 0x27241f : 0x2b261f));
+      if (t.mesh.instanceColor) t.mesh.instanceColor.needsUpdate = true;
+      hit.push({ x: t.x, z: t.z, top: t.top, scale: t.scale, species: t.species });
+      this.effects.emit(t.x, t.top, t.z, (Math.random() - 0.5) * 1.4, 2.0 + Math.random() * 2.5, (Math.random() - 0.5) * 1.4,
+        Math.random() < 0.5 ? '#ffb04a' : '#ff6234', 0.22 + Math.random() * 0.3, 0.5 + Math.random() * 0.7, 0.3, 0.8);
+    }
+    return hit;
   }
 
   _updateFog(dt) {

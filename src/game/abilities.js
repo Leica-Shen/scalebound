@@ -95,6 +95,7 @@ export class AbilitySystem {
     this.group.add(this.fireLight);
     this.cycle = 0;
     this.flameTexture = makeFlameTexture();
+    this.treeFires = [];
   }
 
   get firePositions() {
@@ -285,6 +286,9 @@ export class AbilitySystem {
     for (const f of this.fires) {
       if (Math.hypot(f.x - x, f.z - z) < radius) f.life = Math.min(f.life, 0.4);
     }
+    for (const tf of this.treeFires) {
+      if (Math.hypot(tf.x - x, tf.z - z) < radius + 6) tf.life = Math.min(tf.life, 0.5);
+    }
     this.environment?.flashLightning?.();
   }
 
@@ -389,6 +393,26 @@ export class AbilitySystem {
       life: 13 + this.rng() * 10, emit: 0, spread: 2.5 + this.rng() * 3,
       style, decal, sprites,
     });
+    this._igniteTreesNear(x, z, radius + 5, style);
+  }
+
+  _igniteTreesNear(x, z, radius, style) {
+    if (!this.world?.igniteTreesAt) return;
+    const spots = this.world.igniteTreesAt(x, z, radius);
+    for (const t of spots) {
+      if (this.treeFires.length >= 26) break;
+      const mat = new THREE.SpriteMaterial({
+        map: this.flameTexture, color: new THREE.Color(style?.flame || '#ff7a35'),
+        transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, fog: true, opacity: 0.68,
+      });
+      const sp = new THREE.Sprite(mat);
+      const scl = 1.7 + t.scale * 0.7;
+      sp.position.set(t.x, t.top + scl * 1.15, t.z);
+      sp.scale.set(scl, scl * 1.8, 1);
+      sp.renderOrder = 3;
+      this.group.add(sp);
+      this.treeFires.push({ sprite: sp, x: t.x, z: t.z, top: t.top, age: 0, life: 8 + this.rng() * 8, emit: 0, scale: scl });
+    }
   }
 
   update(dt, time, environment, playerPos, underwater) {
@@ -478,8 +502,31 @@ export class AbilitySystem {
     if (nearestFire && nearestDist < 240) {
       this.fireLight.visible = true;
       this.fireLight.position.set(nearestFire.x, nearestFire.y + 4, nearestFire.z);
-      this.fireLight.intensity = (210 + Math.sin(time * 13) * 55 + Math.sin(time * 23) * 35) * clamp(1 - nearestDist / 240, 0, 1);
+      const lightScale = 0.26 + (environment?.night || 0) * 1.25;
+      this.fireLight.intensity = (58 + Math.sin(time * 13) * 15 + Math.sin(time * 23) * 10) * lightScale * clamp(1 - nearestDist / 240, 0, 1);
     } else this.fireLight.intensity = 0;
+
+    for (let i = this.treeFires.length - 1; i >= 0; i--) {
+      const tf = this.treeFires[i];
+      tf.age += dt;
+      tf.life -= dt * (raining ? 2.8 : 1);
+      if (tf.life <= 0) {
+        this.group.remove(tf.sprite);
+        tf.sprite.material.dispose();
+        this.treeFires.splice(i, 1);
+        continue;
+      }
+      const pulse = 0.76 + Math.sin(time * 10 + tf.x * 0.3 + tf.z * 0.2) * 0.2;
+      tf.sprite.material.opacity = pulse * clamp(tf.life / 2, 0.2, 1);
+      tf.sprite.scale.set(tf.scale, tf.scale * (1.7 + Math.sin(time * 7 + tf.z) * 0.18), 1);
+      tf.emit -= dt;
+      if (tf.emit <= 0) {
+        tf.emit = 0.22 + this.rng() * 0.25;
+        this.effects.emit(tf.x + (this.rng() - 0.5) * 1.5, tf.top + 1.4, tf.z + (this.rng() - 0.5) * 1.5,
+          (this.rng() - 0.5) * 0.8, 2.8 + this.rng() * 2.5, (this.rng() - 0.5) * 0.8,
+          this.rng() < 0.25 ? '#ffd17a' : '#59625d', 0.35 + this.rng() * 0.45, 1.5 + this.rng() * 1.4, 0.2, 0.8);
+      }
+    }
 
     for (let i = this.debris.length - 1; i >= 0; i--) {
       const d = this.debris[i];
@@ -518,6 +565,8 @@ export class AbilitySystem {
       for (const sp of f.sprites) { this.group.remove(sp); sp.material.dispose(); }
     }
     this.fires.length = 0;
+    for (const tf of this.treeFires) { this.group.remove(tf.sprite); tf.sprite.material.dispose(); }
+    this.treeFires.length = 0;
     for (const d of this.debris) {
       this.group.remove(d.mesh);
       if (d.mesh.geometry) d.mesh.geometry.dispose();

@@ -13,6 +13,9 @@ export class DragonAnimator {
     this.roarAge = 99;
     this.roarDuration = 1.55;
     this.roarActive = false;
+    this.breathAge = 99;
+    this.breathDuration = 1.35;
+    this.breathActive = false;
     this.blinkAmount = 1;
     this.blinkProgress = 1;
     this.nextBlink = 2.6 + Math.random() * 3.2;
@@ -29,6 +32,7 @@ export class DragonAnimator {
       stall: 0,
       brake: 0,
       lookYaw: 0,
+      water: 0,
     };
     this.mode = 'showcase';
     this._lastFlapCross = 0;
@@ -46,6 +50,13 @@ export class DragonAnimator {
   triggerRoar() {
     this.roarAge = 0;
     this.roarActive = true;
+  }
+
+  triggerBreath(strength = 1) {
+    this.breathAge = 0;
+    this.breathDuration = 1.25;
+    this.breathActive = true;
+    this.flapEnergy = Math.min(1.35, this.flapEnergy + 0.25 * strength);
   }
 
   _roarCurve() {
@@ -107,6 +118,7 @@ export class DragonAnimator {
     const stallIn = clamp(state.stall ?? 0, 0, 1);
     const brakeIn = clamp(state.brake ?? 0, 0, 1);
     const look = clamp(state.lookYaw ?? 0, -1.2, 1.2);
+    const waterIn = state.water ? 1 : 0;
 
     const k = showcase ? 2.4 : 5.2;
     this.smooth.turn = damp(this.smooth.turn, turnIn, k, dt);
@@ -118,6 +130,7 @@ export class DragonAnimator {
     this.smooth.stall = damp(this.smooth.stall, stallIn, 4.4, dt);
     this.smooth.brake = damp(this.smooth.brake, brakeIn, 4.0, dt);
     this.smooth.lookYaw = damp(this.smooth.lookYaw, look, 2.6, dt);
+    this.smooth.water = damp(this.smooth.water, waterIn, 4.0, dt);
 
     const ss = this.smooth;
 
@@ -126,6 +139,15 @@ export class DragonAnimator {
       this.roarAge += dt;
       if (this.roarAge >= this.roarDuration) this.roarActive = false;
     }
+    if (this.breathActive) {
+      this.breathAge += dt;
+      if (this.breathAge >= this.breathDuration) this.breathActive = false;
+    }
+    const breathProgress = this.breathActive ? clamp(this.breathAge / this.breathDuration, 0, 1) : 1;
+    const breathCharge = this.breathActive ? clamp(breathProgress / 0.32, 0, 1) : 0;
+    const breathRelease = this.breathActive ? clamp((breathProgress - 0.3) / 0.38, 0, 1) : 0;
+    const breathJaw = this.breathActive ? Math.sin(Math.min(1, breathProgress * 1.25) * Math.PI) : 0;
+    const breathRecoil = breathCharge * (1 - breathRelease * 0.9);
     const roar = this._roarCurve();
     this._updateBlink(dt);
 
@@ -250,22 +272,22 @@ export class DragonAnimator {
       const seg = rig.neck[i];
       const tFrac = nCount <= 1 ? 0 : i / (nCount - 1);
       const breathSway = Math.sin(t * 1.1 + i * 0.42) * 0.006;
-      seg.rotation.x = rig.neckBaseX[i] - roar * 0.05 * (0.35 + tFrac) - headCounter * 0.12 * (1 - tFrac * 0.5) + breathSway;
+      seg.rotation.x = rig.neckBaseX[i] - roar * 0.05 * (0.35 + tFrac) - headCounter * 0.12 * (1 - tFrac * 0.5) + breathSway + breathRecoil * 0.12 * (0.3 + tFrac * 0.7) - breathRelease * 0.09 * tFrac;
       seg.rotation.y = (lookSway * 0.22 + ss.lookYaw * 0.22) * (0.25 + tFrac * 0.6) + Math.sin(t * 0.7 + i * 0.3) * 0.006 + (rig.archetype === 'eastern' ? Math.sin(t * 0.9 - i * 0.25) * 0.018 : 0);
       seg.rotation.z = -ss.roll * 0.022 * (0.4 + tFrac);
     }
     if (rig.head) {
-      rig.head.rotation.x = rig.headBaseX + headCounter * 0.5 + headLift * 0.24 + Math.sin(t * 0.9) * 0.012 - ss.stall * 0.1;
+      rig.head.rotation.x = rig.headBaseX + headCounter * 0.5 + headLift * 0.24 + Math.sin(t * 0.9) * 0.012 - ss.stall * 0.1 - breathRecoil * 0.18 + breathRelease * 0.12;
       rig.head.rotation.y = rig.headBaseY + lookSway * 0.58 + ss.lookYaw * 0.45 + ss.turn * 0.09;
       rig.head.rotation.z = -ss.roll * 0.1 + Math.sin(t * 0.6) * 0.007;
     }
     if (rig.jaw) {
-      const jawOpen = roar * 0.62 + ss.boost * 0.045 + ss.stall * 0.06 + Math.max(0, Math.sin(t * 0.37)) * 0.006;
+      const jawOpen = roar * 0.62 + ss.boost * 0.045 + ss.stall * 0.06 + Math.max(0, Math.sin(t * 0.37)) * 0.006 + breathJaw * 0.42;
       rig.jaw.rotation.x = rig.jawBase + jawOpen;
     }
     if (rig.frills) {
       for (const frill of rig.frills) {
-        const flare = 0.04 + Math.abs(ss.turn) * 0.1 + roar * 0.3 + ss.speed * 0.07;
+        const flare = 0.04 + Math.abs(ss.turn) * 0.1 + roar * 0.3 + ss.speed * 0.07 + breathCharge * 0.18;
         frill.group.rotation.z = frill.baseZ + frill.side * flare;
         frill.group.rotation.y = frill.baseY + frill.side * (0.04 + roar * 0.12);
       }
@@ -298,7 +320,7 @@ export class DragonAnimator {
       }
       eh.head.rotation.y = sign * Math.sin(t * 0.36 + hi * 2.1) * 0.3 + ss.lookYaw * 0.2;
       eh.head.rotation.x = 0.48 + Math.sin(t * 0.7 + hi) * 0.03 - ss.pitch * 0.05;
-      if (eh.jaw) eh.jaw.rotation.x = Math.sin(t * 0.27 + hi * 1.7) * 0.035 + roar * 0.22 + ss.boost * 0.02;
+      if (eh.jaw) eh.jaw.rotation.x = Math.sin(t * 0.27 + hi * 1.7) * 0.035 + roar * 0.22 + ss.boost * 0.02 + breathJaw * 0.18;
     }
 
     // ── legs: active tuck, wing-driven pump, planted stance and paddling ──
@@ -307,8 +329,9 @@ export class DragonAnimator {
       const side = leg.side;
       const phase = (front ? 0 : 1.55) + (side > 0 ? 0.36 : -0.14);
       const isEastern = rig.archetype === 'eastern';
-      const flightTuck = clamp(0.52 + ss.speed * 0.92 + ss.boost * 0.18, 0, 1);
-      const tuck = showcase ? 1 : flightTuck;
+      const fastTuck = clamp(0.30 + ss.speed * 1.18 + ss.boost * 0.22, 0, 1);
+      const waterTuck = pose === 'swim' ? clamp(0.25 + ss.speed * 1.35 + ss.water * 0.35, 0, 1) : 0;
+      const tuck = showcase ? 1 : Math.max(fastTuck, waterTuck);
       const pump = Math.sin(this.wingPhase + phase) * (0.035 + Math.max(0, 1 - ss.speed) * 0.03 + autoStrength * 0.045);
       const spread = Math.sin(t * 0.8 + phase) * 0.018 + side * Math.abs(ss.turn) * 0.035;
       let rootTarget;
@@ -324,7 +347,7 @@ export class DragonAnimator {
         ankleTarget = leg.baseAnkleX - 0.04 - settle * 0.4;
         footTarget = -0.05 + Math.sin(t * 0.6 + phase) * 0.018;
         rate = 3.2;
-      } else if (pose === 'swim') {
+      } else if (pose === 'swim' && tuck < 0.62) {
         const paddle = Math.sin(t * 3.1 + phase) * 0.34;
         rootTarget = leg.baseX + paddle;
         kneeTarget = leg.baseKneeX - 0.18 + paddle * 0.5;
@@ -332,13 +355,13 @@ export class DragonAnimator {
         footTarget = -0.08 + Math.sin(t * 3.1 + phase + 1) * 0.08;
         rate = 6.0;
       } else {
-        const targetRoot = (isEastern ? 1.44 : 1.20) + (front ? 0.02 : 0.18);
+        const targetRoot = (isEastern ? 1.50 : 1.27) + (front ? 0.02 : 0.18);
         const targetKnee = (isEastern ? -2.22 : -1.92) - (front ? 0.10 : 0.22);
         const targetAnkle = (isEastern ? 1.65 : 1.42);
         rootTarget = lerp(leg.baseX, targetRoot, tuck) + pump + Math.sin(t * 0.9 + phase) * 0.02;
         kneeTarget = lerp(leg.baseKneeX, targetKnee, tuck) + pump * 0.65;
         ankleTarget = lerp(leg.baseAnkleX, targetAnkle, tuck) - pump * 0.9;
-        footTarget = -0.04 + Math.sin(t * 1.35 + phase) * 0.035 + ss.turn * side * 0.02;
+        footTarget = -0.04 + Math.sin(t * 1.35 + phase) * 0.035 + ss.turn * side * 0.02 - tuck * 0.16;
       }
       leg.root.rotation.x = damp(leg.root.rotation.x, rootTarget, rate, dt);
       leg.root.rotation.z = damp(leg.root.rotation.z, leg.baseZ + side * (0.02 + Math.abs(ss.turn) * 0.06) + spread, 4.5, dt);

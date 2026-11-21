@@ -272,14 +272,19 @@ export class Environment {
     l.rim.intensity = dayFactor * 0.35 + this.night * 0.1;
     l.hero.intensity = 0.72 + (1 - dayFactor) * 0.18;
     if (this.underwater) {
-      l.sun.intensity *= 0.16;
-      l.hemi.intensity *= 0.5;
-      l.ambient.intensity *= 0.6;
-      l.fill.color.set('#2a7e91');
-      l.fill.intensity = 0.7;
+      // Clear, readable lagoon light: enough ambient to read scales and seabed
+      // silhouettes, with a cool fill that keeps depth without going pitch dark.
+      l.sun.intensity *= 0.32;
+      l.hemi.intensity *= 0.82;
+      l.ambient.intensity *= 0.9;
+      l.hemi.color.set('#5ac6d8');
+      l.fill.color.set('#3dabc4');
+      l.fill.intensity = 1.0;
+      l.rim.color.set('#7ee8f1');
+      l.rim.intensity = 0.28;
     }
     if (this.world.renderer) {
-      const exposure = this.underwater ? 1.18 : (1.34 + this.night * 0.16 + this.rain * 0.04);
+      const exposure = this.underwater ? 1.36 : (1.34 + this.night * 0.16 + this.rain * 0.04);
       this.world.renderer.toneMappingExposure = exposure;
     }
   }
@@ -290,14 +295,16 @@ export class Environment {
     const wet = this.rain * 0.4 + this.snow * 0.17 + this.fogAmount * 0.9;
     if (this.underwater) {
       w.sky.mesh.visible = false;
-      this.scene.background = this.scene.background || new THREE.Color('#042537');
-      this.scene.background.set('#042537');
-      w.fogNearTarget = 4;
-      w.fogFarTarget = 78 - this.fogAmount * 18;
-      w.fogColorTarget = new THREE.Color('#07394a');
+      if (w.waterMesh) w.waterMesh.visible = false;
+      this.scene.background = this.scene.background || new THREE.Color('#073a4d');
+      this.scene.background.set('#073a4d');
+      w.fogNearTarget = 16;
+      w.fogFarTarget = 215 - this.fogAmount * 34;
+      w.fogColorTarget = new THREE.Color('#0a5061');
       w.sky.mesh.visible = false;
     } else {
       w.sky.mesh.visible = true;
+      if (w.waterMesh) w.waterMesh.visible = true;
       this.scene.background = null;
       w.fogNearTarget = 440 - this.fogAmount * 280 - this.rain * 180 - this.snow * 200;
       w.fogFarTarget = 1600 - this.fogAmount * 950 - this.rain * 500 - this.snow * 500;
@@ -313,7 +320,8 @@ export class Environment {
     if (w.clouds) {
       const tint = this.night > 0.5 ? 0x58616d : (this.rain > 0.25 ? 0xaeb6b3 : 0xffe6c8);
       for (const c of w.clouds) {
-        c.sprite.material.opacity = 0.16 + this.cloudiness * 0.4;
+        c.sprite.visible = !this.underwater;
+        c.sprite.material.opacity = this.underwater ? 0 : 0.16 + this.cloudiness * 0.4;
         c.sprite.material.color.lerp(new THREE.Color(tint), 0.03);
       }
     }

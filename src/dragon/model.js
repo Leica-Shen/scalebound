@@ -717,6 +717,17 @@ function buildHead(parent, cfg, mats, scale) {
     spike(head, 0.055 * s, 0.23 * s, 0.055 * s, sd * headW * 0.43, -headH * 0.16, -0.03 * s, mats.horn, 0.8, 0, sd * 1.1);
   }
   // upper lip and a hint of a mouth gap
+  // Head read: brow ridges, cheek plates, a raised nose bridge and a dark
+  // inner mouth make the silhouette carry at gameplay distance.
+  box(head, headW * 0.33, headH * 0.13, 0.30 * s, -headW * 0.27, headH * 0.35, 0.48 * s, mats.light, 0.06, 0, -0.1);
+  box(head, headW * 0.33, headH * 0.13, 0.30 * s, headW * 0.27, headH * 0.35, 0.48 * s, mats.light, 0.06, 0, 0.1);
+  box(head, headW * 0.16, headH * 0.10, 0.34 * s, 0, headH * 0.27, 0.63 * s + snoutLen * 0.35, mats.light, -0.1, 0, 0);
+  box(head, headW * 0.10, headH * 0.07, 0.16 * s, -headW * 0.10, headH * 0.04, 0.63 * s + snoutLen * 0.92, mats.dark);
+  box(head, headW * 0.10, headH * 0.07, 0.16 * s, headW * 0.10, headH * 0.04, 0.63 * s + snoutLen * 0.92, mats.dark);
+  box(head, headW * 0.20, headH * 0.09, 0.24 * s, -headW * 0.48, -headH * 0.06, 0.42 * s, mats.accent, 0, 0, -0.35);
+  box(head, headW * 0.20, headH * 0.09, 0.24 * s, headW * 0.48, -headH * 0.06, 0.42 * s, mats.accent, 0, 0, 0.35);
+  box(head, headW * 0.52, headH * 0.12, 0.32 * s, 0, -headH * 0.09, 0.63 * s + snoutLen * 0.58, mats.dark, 0.1, 0, 0);
+  box(head, headW * 0.32, headH * 0.08, 0.18 * s, 0, -headH * 0.18, 0.63 * s + snoutLen * 0.82, mats.accent2, 0.1, 0, 0);
   box(head, headW * 0.62, 0.055 * s, snoutLen * 0.85, 0, -headH * 0.22, 0.58 * s + snoutLen * 0.48, mats.dark);
   box(head, headW * 0.56, 0.08 * s, snoutLen * 0.65, 0, -headH * 0.27, 0.6 * s + snoutLen * 0.38, mats.dark, 0.02, 0, 0);
 
@@ -1005,40 +1016,65 @@ function buildExtraHeads(inner, cfg, mats, rig) {
   if (!count) return;
   const { W, H, L } = rig.dimensions;
   rig.extraHeads = [];
+  // Hydra/Orochi crowns: fan the auxiliary necks out across the shoulders so
+  // eight heads read as a ring of separate animals, not a stack of clones.
+  const spread = cfg.extra.headSpread || 0;
   for (let i = 0; i < count; i++) {
     const sd = i % 2 === 0 ? -1 : 1;
+    const row = Math.floor(i / 2);
+    const t = count === 1 ? 0.5 : i / (count - 1);
     const anchor = new THREE.Group();
-    anchor.position.set(sd * W * 0.34, H * 0.3, L * 0.24);
-    anchor.rotation.y = sd * 0.5;
-    anchor.rotation.z = -sd * 0.15;
+    if (spread) {
+      anchor.position.set(
+        sd * W * (0.18 + row * 0.115),
+        H * (0.24 + row * 0.045),
+        L * (0.36 - row * 0.052),
+      );
+      anchor.rotation.y = sd * (0.34 + row * 0.16);
+      anchor.rotation.z = -sd * (0.08 + row * 0.035);
+    } else {
+      anchor.position.set(sd * W * 0.34, H * 0.3, L * 0.24);
+      anchor.rotation.y = sd * 0.5;
+      anchor.rotation.z = -sd * 0.15;
+    }
     inner.add(anchor);
     let parent = anchor;
     const segments = [];
-    const countSeg = 4;
-    const size = 0.62;
-    const segLen = 0.58;
+    const countSeg = spread ? 6 : 4;
+    const size = spread ? 0.9 : 0.62;
+    const segLen = spread ? 0.66 : 0.58;
     for (let k = 0; k < countSeg; k++) {
       const g = new THREE.Group();
       if (k > 0) g.position.z = segLen * 0.94;
-      g.rotation.x = -0.18 + k * 0.035;
+      g.rotation.x = -0.2 + k * (spread ? 0.028 : 0.035);
+      g.rotation.y = sd * (0.03 + k * 0.012);
       parent.add(g);
       parent = g;
       segments.push(g);
-      const taper = 1 - k * 0.07;
-      box(g, 0.34 * size, 0.34 * size, segLen * taper, 0, 0, segLen * 0.5, mats.base);
+      const taper = 1 - k * 0.06;
+      box(g, 0.34 * size, 0.34 * size, segLen * taper, 0, 0, segLen * 0.5, k % 2 ? mats.base : mats.light);
       box(g, 0.24 * size, 0.08 * size, segLen * 0.9, 0, -0.11 * size, segLen * 0.5, mats.belly);
-      if (k > 0) {
+      if (k > 1) {
         const f = finPanel(g, 0.3 * size, 0.22 * size, mats.accent);
         f.position.set(sd * 0.14, 0.1, segLen * 0.4);
+        f.rotation.z = sd * 0.24;
+      }
+      if (spread && k % 2 === 0) {
+        box(g, 0.08 * size, 0.05 * size, segLen * 0.6, 0, 0.18 * size, segLen * 0.52, mats.accent2);
       }
     }
     const head = new THREE.Group();
     head.position.z = segLen * 0.96;
     head.rotation.x = 0.48;
     parent.add(head);
-    const hp = buildHead(head, cfg, mats, 0.55 * size);
+    const hp = buildHead(head, cfg, mats, (spread ? 0.7 : 0.55) * size);
     for (const e of hp.eyes) rig.extraEyes.push(e);
-    const mini = { anchor, segments, head, jaw: hp.jaw, eyes: hp.eyes, frills: hp.frills, baseRot: segments.map((s2) => s2.rotation.x) };
+    if (spread) {
+      // dark eye mask + a bright brow plate make the side heads legible at distance
+      box(head, 0.3 * size, 0.16 * size, 0.18 * size, 0, 0.16 * size, 0.66 * size, mats.dark);
+      box(head, 0.2 * size, 0.07 * size, 0.12 * size, sd * 0.1 * size, 0.25 * size, 0.58 * size, mats.accent);
+    }
+    const mini = { anchor, segments, head, jaw: hp.jaw, eyes: hp.eyes, frills: hp.frills, baseRot: segments.map((s2) => s2.rotation.x), side: sd, row };
     rig.extraHeads.push(mini);
   }
 }

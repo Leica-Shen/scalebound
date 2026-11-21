@@ -8,6 +8,7 @@ import { Game } from './game/game.js';
 import { DRAGONS } from './dragon/catalog.js';
 import { WORLD_SEED } from './core/terrain.js';
 
+const BETA = !!window.__SCALEBOUND_BETA__;
 const canvas = document.getElementById('scene');
 const app = document.getElementById('app');
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -64,11 +65,17 @@ const game = new Game({
   audio,
   catalog: DRAGONS,
   renderer,
+  beta: BETA,
 });
 ui.setSoundEnabled(game.soundEnabled);
+ui.setBeta(BETA);
+if (BETA) {
+  document.documentElement.classList.add('is-beta');
+  document.title = '鳞界 2.1 Beta · SCALEBOUND';
+}
 
 window.__SCALEBOUND__ = {
-  game, world, ui, audio, scene, camera, renderer, pipeline,
+  game, world, ui, audio, scene, camera, renderer, pipeline, beta: BETA,
   ready: false,
   THREE,
   finishIntro: () => game.finishIntro(),

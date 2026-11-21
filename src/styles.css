@@ -2539,3 +2539,49 @@ kbd { font-size: 8px; min-width: 18px; height: 17px; }
   .ability-slot { min-width: 170px; }
   .action-prompts { bottom: auto; }
 }
+
+/* Focus mode keeps the flight view clear while preserving the essential gauges. */
+.hud.is-focus .hud-right,
+.hud.is-focus .control-ribbon,
+.hud.is-focus .biome-title,
+.hud.is-focus .toast-layer {
+  opacity: 0 !important;
+  visibility: hidden;
+  pointer-events: none !important;
+}
+.hud.is-focus .hud-bottom-center { opacity: .88; }
+.hud-icon.is-active { color: var(--gold-bright); border-color: rgba(231,195,109,.5); background: rgba(231,195,109,.1); }
+
+.beta-flag {
+  position: fixed; top: 82px; right: 78px; z-index: 35;
+  padding: 3px 7px; border: 1px solid rgba(231,195,109,.48);
+  background: rgba(8,15,15,.68); color: var(--gold-bright);
+  font-size: 7px; letter-spacing: .16em; pointer-events: none;
+}
+.is-beta .beta-flag { display: block; }
+.beta-icon-label { color: var(--gold-bright); font-size: 10px; font-weight: 600; }
+.combat-panel {
+  position: absolute; left: var(--ui-pad); bottom: 190px; width: 224px;
+  padding: 7px 9px; border: 1px solid rgba(231,195,109,.28);
+  background: rgba(6,13,15,.78); backdrop-filter: blur(3px);
+  z-index: 12; font-size: 8px; letter-spacing: .05em;
+}
+.combat-head { display: flex; justify-content: space-between; gap: 8px; color: var(--paper-3); padding-bottom: 5px; border-bottom: 1px solid var(--line); }
+.combat-head b { color: var(--gold); font-weight: 400; font-size: 7px; letter-spacing: .12em; }
+.combat-head em { color: var(--paper-2); font-style: normal; font-size: 7px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 130px; }
+.combat-row { display: flex; align-items: center; gap: 6px; margin-top: 5px; color: var(--paper-3); }
+.combat-row > span { width: 24px; }
+.combat-row > i { flex: 1; height: 4px; background: rgba(232,219,190,.12); overflow: hidden; }
+.combat-row > i b { display: block; height: 100%; width: 100%; background: var(--gold); }
+.combat-row > em { font-style: normal; color: var(--paper-2); width: 27px; text-align: right; font-size: 7px; }
+.help-beta { display: none; margin-top: 13px; padding: 9px 11px; border: 1px solid rgba(231,195,109,.25); background: rgba(231,195,109,.04); }
+.is-beta .help-beta { display: block; }
+.help-beta > b { color: var(--gold-bright); font-weight: 400; font-size: 9px; letter-spacing: .12em; }
+.help-beta > span { color: var(--paper-3); font-size: 7px; margin-left: 8px; }
+.help-beta dl { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px 14px; margin: 7px 0 0; }
+.help-beta dl > div { display: flex; gap: 7px; align-items: baseline; }
+.help-beta dt { flex: 0 0 auto; font-size: 7px; color: var(--paper-2); }
+.help-beta dd { margin: 0; font-size: 7px; color: var(--paper-3); line-height: 1.6; }
+.beta-only { display: none; }
+.is-beta .beta-only { display: inline-flex; }
+@media (max-height: 620px) { .combat-panel { bottom: 150px; width: 190px; } .help-beta { display: none; } }

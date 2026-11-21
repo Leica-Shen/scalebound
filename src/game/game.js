@@ -5,6 +5,7 @@ import { clamp, damp, lerp, smootherstep, smoothstep } from '../core/noise.js';
 import { SEA_LEVEL, regionAt } from '../core/terrain.js';
 import { getShadowTexture } from '../core/textures.js';
 import { AbilitySystem } from './abilities.js';
+import { RivalDragons } from './rivals.js';
 import { heightAt } from '../core/terrain.js';
 
 const _forward = new THREE.Vector3();
@@ -43,7 +44,7 @@ function save(key, value) {
 }
 
 export class Game {
-  constructor({ scene, camera, world, ui, audio, catalog, renderer }) {
+  constructor({ scene, camera, world, ui, audio, catalog, renderer, beta = false }) {
     this.scene = scene;
     this.renderer = renderer;
     this.camera = camera;
@@ -51,6 +52,13 @@ export class Game {
     this.ui = ui;
     this.audio = audio;
     this.catalog = catalog;
+    this.beta = !!beta;
+    this.autoPilot = false;
+    this.combatHealth = 100;
+    this.combatTarget = null;
+    this.attackCooldown = 0;
+    this.lastDamageAt = -10;
+    this.autoPilotState = '巡航';
 
     this.time = 0;
     this.mode = 'menu';
@@ -157,6 +165,8 @@ export class Game {
     this._boostGesture = false;
     this._wasFlapKey = false;
     this.soundEnabled = loadNumber('scalebound.audio', '1') !== '0';
+    this.controlSwap = loadNumber('scalebound.controlSwap', '1') !== '0';
+    this.hudFocus = false;
     this._audioInitialized = false;
     this._winBlurPause = false;
 
@@ -171,6 +181,8 @@ export class Game {
       onRandom: () => this.randomDragon(),
       onStart: () => this.startRun(),
       onToggleAudio: () => this.toggleAudio(),
+      onToggleHudFocus: () => this.toggleHudFocus(),
+      onToggleAutoFlight: () => this.toggleAutoFlight(),
       onHoverCard: () => {
         this.ensureAudio();
         this.audio.uiHover();
@@ -207,6 +219,7 @@ export class Game {
       scene: this.scene, world: this.world, effects: this.world.effects,
       wildlife: this.world.wildlife, audio: this.audio,
     });
+    this.rivals = new RivalDragons(this.scene, this.world, this, this.catalog);
     this.environment.onLightning = () => this._onLightning();
     this.world.setGameplayVisible(false);
     this.ui.setSoundEnabled(this.soundEnabled);
@@ -262,6 +275,23 @@ export class Game {
         this.audio.setMode(this.mode === 'flight' ? 'flight' : 'menu');
       }).catch(() => {});
     }
+  }
+
+  toggleHudFocus(force = null) {
+    this.hudFocus = force === null ? !this.hudFocus : !!force;
+    this.ui.setFocusMode(this.hudFocus);
+    this.ui.toast(this.hudFocus ? '聚焦视野 · 面板已隐藏（TAB 恢复）' : '信息面板已恢复', { duration: 1700 });
+  }
+
+  toggleControlSwap() {
+    this.controlSwap = !this.controlSwap;
+    save('scalebound.controlSwap', this.controlSwap ? '1' : '0');
+    this.keys?.clear?.();
+    this._cancelMouseSteer();
+    this.ui.toast(
+      this.controlSwap ? '方向互调：开 · W 降 S 升 / A 右 D 左 · 鼠标左右反向' : '方向互调：关 · 恢复标准方向',
+      { duration: 2600, strong: true },
+    );
   }
 
   toggleAudio() {
@@ -537,6 +567,13 @@ export class Game {
     this.orbit.pitch = 0;
     this.flapHeld = false;
     this.keys?.clear?.();
+    this.combatHealth = 100;
+    this.combatTarget = null;
+    this.autoPilot = false;
+    this.autoPilotState = '巡航';
+    this.rivals?.setEnabled(this.beta);
+    this.ui.setAutoFlight?.(false);
+    this.ui.setCombatState?.({ health: 100, target: null, auto: false });
     this.ui.closePause();
     this.ui.closeHelp();
     this.ui.hideIntro();
@@ -583,6 +620,10 @@ export class Game {
       this.ui.el.hud.classList.remove('is-cinematic');
       this.ui.hideIntro();
       this.ui.showMenu();
+      this.rivals?.setEnabled(false);
+      this.autoPilot = false;
+      this.ui.setAutoFlight?.(false);
+      this.ui.setCombatState?.({ health: 100, target: null, auto: false });
       this.ui.closePause();
       this.ui.closeHelp();
       this.helpContext = null;
@@ -709,6 +750,16 @@ export class Game {
           return;
         }
       }
+      if (code === 'Tab') {
+        this.toggleHudFocus();
+        e.preventDefault();
+        return;
+      }
+      if (code === 'KeyG') {
+        this.toggleControlSwap();
+        e.preventDefault();
+        return;
+      }
       if (code === 'KeyM') {
         this.toggleAudio();
         e.preventDefault();
@@ -728,6 +779,16 @@ export class Game {
       }
       if (this.mode === 'flight') {
         if (this.paused) {
+          return;
+        }
+        if (code === 'KeyB') {
+          this.toggleAutoFlight();
+          e.preventDefault();
+          return;
+        }
+        if (code === 'KeyX') {
+          this.attackRival();
+          e.preventDefault();
           return;
         }
         if (code === 'KeyF') {
@@ -1040,7 +1101,7 @@ export class Game {
   doFlap(auto = false) {
     if (this.mode !== 'flight' || this.paused || this.controlsLocked) return;
     const f = this.flight;
-    const cost = f.flapCost;
+    const cost = f.flapCost * 0.88;
     if (this.stamina < cost * 0.5) {
       this.audio.warning();
       return;
@@ -1069,6 +1130,143 @@ export class Game {
     this.shake = Math.max(this.shake, 0.5);
     this.flash = Math.max(this.flash, 0.13);
     this.ui.flash(0.09, 320);
+  }
+
+  toggleAutoFlight() {
+    if (!this.beta) {
+      this.ui.toast('自动飞行属于 Beta 前瞻功能 · 请打开 scalebound-beta.html', { duration: 2800, strong: true });
+      return;
+    }
+    if (this.mode !== 'flight') return;
+    this.autoPilot = !this.autoPilot;
+    this.autoInput = { pitchIn: 0, turnIn: 0 };
+    this.ui.setAutoFlight(this.autoPilot);
+    this.ui.toast(
+      this.autoPilot ? 'Beta · 自动飞行开启：巡航 / 捕食 / 休整' : 'Beta · 自动飞行关闭',
+      { duration: 2400, strong: true },
+    );
+    if (this.autoPilot && (this.flightState === 'grounded' || this.flightState === 'floating')) this._takeOff();
+  }
+
+  _updateAutopilot(dt) {
+    if (!this.beta || !this.autoPilot) return;
+    this.autoInput = this.autoInput || { pitchIn: 0, turnIn: 0 };
+    this.autoInput.pitchIn = 0;
+    this.autoInput.turnIn = 0;
+    if (this.attackCooldown > 0) this.attackCooldown = Math.max(0, this.attackCooldown - dt);
+    if (this.flightState === 'landing') { this.autoPilotState = '栖落'; return; }
+    if (this.flightState === 'swimming') {
+      this.autoPilotState = '上浮';
+      if (this.stamina < this.maxStamina * 0.35) this._surfaceFromSwim();
+      return;
+    }
+    if (this.flightState === 'grounded' || this.flightState === 'floating') {
+      this.autoPilotState = '休整';
+      if (this.stamina > this.maxStamina * 0.88 && this.satiety > 35) this._takeOff();
+      return;
+    }
+    // Beta AI decision tree: conflicts first, then hunger, then a safe patrol.
+    const rival = this.rivals?.nearest(this.playerPos, 190);
+    let target = null;
+    let mode = '巡航';
+    if (rival) {
+      target = rival.pos;
+      mode = '遭遇';
+      const dist = rival.pos.distanceTo(this.playerPos);
+      const toRival = new THREE.Vector3().subVectors(rival.pos, this.playerPos).normalize();
+      const facing = toRival.dot(new THREE.Vector3(0, 0, 1).applyQuaternion(this.rig.group.quaternion));
+      if (dist < 44 && facing > 0.35 && this.attackCooldown <= 0) {
+        this.attackCooldown = 0.55;
+        this.attackRival();
+      }
+    } else if (this.satiety < 58) {
+      let best = null, bd = 300;
+      for (const a of this.wildlife?.animals || []) {
+        if (!a.alive || !this.dragon.survival.diet.includes(a.type)) continue;
+        const d = a.pos.distanceTo(this.playerPos);
+        if (d < bd) { bd = d; best = a; }
+      }
+      if (best) {
+        target = best.pos; mode = '捕食';
+        if (bd < 30 && this.promptFeed) this.tryFeed();
+      }
+    }
+    if (!target) {
+      if (!this.autoWaypoint || this.autoWaypoint.distanceTo(this.playerPos) < 45) {
+        const a = this.yaw + (Math.random() - 0.5) * 1.8;
+        const x = this.playerPos.x + Math.sin(a) * 260;
+        const z = this.playerPos.z + Math.cos(a) * 260;
+        this.autoWaypoint = new THREE.Vector3(x, Math.max(this.world.getHeight(x, z), SEA_LEVEL) + 72, z);
+      }
+      target = this.autoWaypoint;
+    }
+    const lowStamina = this.stamina < this.maxStamina * 0.17;
+    const inCombat = mode === '遭遇';
+    if (lowStamina && !inCombat) {
+      this.autoPilotState = '寻地休整';
+      if (this.flightState === 'flying') this.startLanding();
+      return;
+    }
+    this.autoPilotState = mode;
+    const dx = target.x - this.playerPos.x;
+    const dz = target.z - this.playerPos.z;
+    const dist = Math.hypot(dx, dz);
+    const desiredY = mode === '遭遇'
+      ? target.y + 4
+      : Math.max(this.world.getHeight(target.x, target.z), SEA_LEVEL) + 62;
+    const yawErr = normAngle(Math.atan2(dx, dz) - this.yaw);
+    const altitudeErr = desiredY - this.playerPos.y;
+    let pitch = clamp(altitudeErr / 28, -0.55, 0.55) + clamp((24 - this.pitch) * 0.0, 0, 0);
+    if (mode === '捕食' && dist < 90) pitch = clamp((target.y - this.playerPos.y) / 24, -0.7, 0.45);
+    this.autoInput.turnIn = clamp(yawErr * 1.45, -1, 1);
+    this.autoInput.pitchIn = pitch;
+    // Gentle automatic power strokes keep the beta flight self-sustaining.
+    if (this.time > (this.autoNextFlap || 0) && this.stamina > this.maxStamina * 0.25 && (this.playerVelocity.y < 0 || altitudeErr > 8)) {
+      this.autoNextFlap = this.time + 1.9;
+      this.doFlap(true);
+    }
+  }
+
+  attackRival() {
+    if (!this.beta) {
+      this.ui.toast('空战 / 龙 AI 属于 Beta 前瞻功能 · 请打开 scalebound-beta.html', { duration: 2600, strong: true });
+      return;
+    }
+    if (this.mode !== 'flight' || this.paused || this.introActive) return;
+    if (this.attackCooldown > 0) return;
+    const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(this.rig.group.quaternion);
+    const hit = this.rivals?.playerAttack(this.playerPos, fwd);
+    if (!hit) {
+      this.ui.toast('抓咬落空 · 靠近并面向非玩家龙', { duration: 1400 });
+      return;
+    }
+    this.attackCooldown = 0.9;
+    this.shake = Math.max(this.shake, 0.3);
+    this.world.effects.burst(this._headPosition(new THREE.Vector3()), this.dragon.palette.accent, 18, 8, 0.24, 0.8);
+    this.audio.groundHit(0.25);
+    this.ui.toast(
+      hit.alive ? `抓咬命中 · ${hit.name} ${Math.max(0, Math.round(hit.hp))} HP` : `击坠 · ${hit.name}`,
+      { duration: 1600, strong: true },
+    );
+    if (hit.alive) this.combatHealth = Math.min(100, this.combatHealth + 1.5);
+  }
+
+  takeRivalHit(amount, npc) {
+    if (!this.beta || this.paused) return;
+    this.combatHealth = Math.max(0, this.combatHealth - amount);
+    this.lastDamageAt = this.time;
+    this.shake = Math.max(this.shake, 0.5);
+    this.flash = Math.max(this.flash, 0.12);
+    this.ui.flash(0.07, 220);
+    this.audio.groundHit(0.35);
+    this.ui.toast(`遭遇 · ${npc.name} 反击 -${amount}`, { duration: 1600 });
+    if (this.combatHealth <= 0) {
+      this.combatHealth = 38;
+      this.stamina = Math.max(18, this.stamina * 0.45);
+      this.combatTarget = null;
+      this.resetSafe();
+      this.ui.toast('力竭 · 龙契将你带回安全高度', { duration: 2600, strong: true });
+    }
   }
 
   toggleCameraMode() {
@@ -1151,17 +1349,19 @@ export class Game {
   }
 
   _readFlightControls(locked) {
+    if (this.beta && this.autoPilot && !locked) return this.autoInput || { pitchIn: 0, turnIn: 0 };
     let pitchIn = 0;
     let turnIn = 0;
     if (!locked) {
-      if (this.keys.has('KeyW') || this.keys.has('ArrowUp')) pitchIn += 1;
-      if (this.keys.has('KeyS') || this.keys.has('ArrowDown')) pitchIn -= 1;
-      if (this.keys.has('KeyD') || this.keys.has('ArrowRight')) turnIn += 1;
-      if (this.keys.has('KeyA') || this.keys.has('ArrowLeft')) turnIn -= 1;
+      const keySign = this.controlSwap ? -1 : 1;
+      if (this.keys.has('KeyW') || this.keys.has('ArrowUp')) pitchIn += keySign;
+      if (this.keys.has('KeyS') || this.keys.has('ArrowDown')) pitchIn -= keySign;
+      if (this.keys.has('KeyD') || this.keys.has('ArrowRight')) turnIn += keySign;
+      if (this.keys.has('KeyA') || this.keys.has('ArrowLeft')) turnIn -= keySign;
       turnIn += this.touchInput.x;
       pitchIn += -this.touchInput.y;
       if (this.mouseSteer.active && this.cameraMode !== 2) {
-        turnIn += this.mouseSteer.x * 0.9;
+        turnIn += this.mouseSteer.x * 0.9 * keySign;
         pitchIn += this.mouseSteer.y;
       }
       pitchIn = clamp(pitchIn, -1, 1);
@@ -1181,6 +1381,7 @@ export class Game {
 
   updateFlight(dt) {
     this.time += dt;
+    if (this.beta && this.autoPilot && !this.paused && !this.introActive) this._updateAutopilot(dt);
     if (this.paused) {
       this.audio.setWind(0, false, false);
       return;
@@ -1255,7 +1456,7 @@ export class Game {
     const turnControl = (1 - this.stall * 0.55) * (0.3 + 0.7 * clamp(this.speed / 26, 0.2, 1.3));
     this.yaw += this.turnAxis * f.turn * turnControl * dt;
     this.pitch += this.pitchAxis * (0.76 - this.stall * 0.28) * dt;
-    if (Math.abs(this.pitchAxis) < 0.035) this.pitch = damp(this.pitch, 0.018, 0.75, dt);
+    if (Math.abs(this.pitchAxis) < 0.035) this.pitch = damp(this.pitch, 0.018, 1.15, dt);
     if (this.stall > 0.16) this.pitch = damp(this.pitch, -0.36, 1.0 + this.stall * 1.6, dt);
     this.pitch = clamp(this.pitch, -1.02, 0.92);
     const targetRoll = -this.turnAxis * (0.48 + 0.16 * clamp(speedNorm, 0, 1)) + this.pitchAxis * -0.015;
@@ -1421,7 +1622,7 @@ export class Game {
         const hx = (this.world.getHeight(x + eps, z) - this.world.getHeight(x - eps, z)) / (eps * 2);
         const hz = (this.world.getHeight(x, z + eps) - this.world.getHeight(x, z - eps)) / (eps * 2);
         slope = Math.hypot(hx, hz);
-        if (slope > 0.32) return;
+        if (slope > 0.42) return;
       }
       const dist = Math.hypot(x - originX, z - originZ);
       candidates.push({ x, z, ground, water, elevation, slope, score: slope * 2 + dist * 0.02 + (this.playerPos.y - elevation) * 0.004 });
@@ -1501,7 +1702,7 @@ export class Game {
     if (!locked) {
       const turn = input.turnIn;
       if (Math.abs(turn) > 0.02) this.yaw += turn * 0.55 * dt;
-      if (water && this.dragon.landing?.dive && (this.keys.has('KeyS') || this.keys.has('ControlLeft'))) {
+      if (water && this.dragon.landing?.dive && (this.keys.has(this.controlSwap ? 'KeyW' : 'KeyS') || this.keys.has('ControlLeft'))) {
         this._enterWaterFromFloat();
         return;
       }
@@ -1627,6 +1828,7 @@ export class Game {
       stall: this.stall,
       brake: this.brake,
       lookYaw: 0,
+      water: this.underwater,
     };
     this.animator.update(dt, animState);
     this.rig.group.position.copy(this.playerPos);
@@ -1638,6 +1840,15 @@ export class Game {
       underwater: this.underwater,
       firePositions: this.abilities.firePositions,
     });
+    this.attackCooldown = Math.max(0, (this.attackCooldown || 0) - dt);
+    if (this.time - this.lastDamageAt > 5) this.combatHealth = Math.min(100, this.combatHealth + dt * 2.2);
+    this.rivals?.update(dt, this.playerPos, this.world.environment);
+    if (this.beta) {
+      const r = this.rivals?.nearest(this.playerPos, 220) || null;
+      this.combatTarget = r;
+      this.ui.setAutoFlight?.(this.autoPilot);
+      this.ui.setCombatState?.({ health: this.combatHealth, target: r, auto: this.autoPilot });
+    }
     this._updateSurvival(dt);
     this._updateInteractions();
     this._updateFlightCamera(dt);
@@ -1779,7 +1990,7 @@ export class Game {
     if (this.dragon.id === 'lilong' && env.night > 0.4 && this.playerPos.y - SEA_LEVEL > 25) {
       return { kind: 'moon', label: '凝月 · 夜穹清辉' };
     }
-    if (this.dragon.id === 'ladon' && (this.flightState === 'grounded' || this.flightState === 'floating') && this.regionInfo?.id === 'forest') {
+    if (this.dragon.id === 'yamata' && (this.flightState === 'grounded' || this.flightState === 'floating') && this.regionInfo?.id === 'forest') {
       return { kind: 'fruit', label: '觅果 · 林间' };
     }
     if ((this.flightState === 'floating' || this.flightState === 'grounded' || this.underwater) && this.surfaceInfo.water) {
@@ -1828,7 +2039,7 @@ export class Game {
       } else if (feed.kind === 'fruit') {
         this.satiety = Math.min(100, this.satiety + 26);
         this.stamina = Math.min(this.maxStamina, this.stamina + 8);
-        this.ui.toast('觅果 · 林间的金苹果', { duration: 2200 });
+        this.ui.toast('觅食 · 林间蛇莓', { duration: 2200 });
       } else {
         this.satiety = Math.min(100, this.satiety + 8);
         this.ui.toast('饮水 · 清冽甘甜', { duration: 1500 });
@@ -1860,13 +2071,19 @@ export class Game {
     this.regenDelay = 1.3;
     this.abilityCooldown = this.dragon.ability?.cooldown || 9;
     this.animator.triggerRoar();
+    this.animator.triggerBreath(1);
     this.audio.roar();
     const result = this.abilities.cast({
       dragon: this.dragon, origin, forward: fwd,
       environment: this.world.environment,
     });
     this.abilityElement = result.element;
-    const names = { fire: '赤焰龙息', shadowfire: '冥焰吐息', frost: '琉璃霜息', water: '翻江倒海', nature: '金苹果藤蔓', star: '星陨天罚', storm: '九霄天雷' };
+    if (this.beta && result.impact) {
+      const hitPoint = new THREE.Vector3(result.impact.x, result.impact.y, result.impact.z);
+      const hit = this.rivals?.areaDamage(hitPoint, 34, 26) || 0;
+      if (hit) this.ui.toast(`龙赋命中 · ${hit} 条非玩家龙`, { duration: 1900 });
+    }
+    const names = { fire: '赤焰龙息', shadowfire: '冥焰吐息', frost: '琉璃霜息', water: '翻江倒海', nature: '八岐瘴气', star: '星陨天罚', storm: '九霄天雷' };
     this.ui.flash(0.16, 260);
     this.ui.toast(`龙赋 · ${names[result.element] || this.dragon.ability?.name}`, { duration: 2200, strong: true });
     this.shake = Math.max(this.shake, 0.55);
@@ -2027,8 +2244,8 @@ export class Game {
     }
 
     if (this.underwater) {
-      const dist = (rig.cameraDistance * 0.78 + 4) * this.camZoom + speedNorm * 1.5;
-      const up = Math.max(3.2, dims.H * 1.7 + 2.2);
+      const dist = (rig.cameraDistance * 1.28 + 13) * this.camZoom + speedNorm * 2.2;
+      const up = Math.max(2.4, dims.H * 1.0 + 1.6);
       _target.copy(this.playerPos)
         .addScaledVector(_forward, -dist)
         .addScaledVector(UP, up);
@@ -2043,7 +2260,7 @@ export class Game {
       this.chaseLook.lerp(look, 1 - Math.exp(-6 * dt));
       camera.up.copy(UP);
       camera.lookAt(this.chaseLook);
-      camera.fov = damp(camera.fov, 54 + speedNorm * 4, 2.5, dt);
+      camera.fov = damp(camera.fov, 61 + speedNorm * 4, 2.5, dt);
       camera.updateProjectionMatrix();
       this._applyCameraShake();
       this._decayOrbit(dt, false);
@@ -2258,7 +2475,7 @@ function saturatedRecovery(stamina, max) {
 }
 
 function restLabel(dragon, state, survival) {
-  if (state === 'grounded') return dragon.id === 'ladon' ? '林间栖地 · 体力恢复' : '地面栖伏 · 体力恢复';
+  if (state === 'grounded') return dragon.id === 'yamata' ? '浅水栖伏 · 体力恢复' : '地面栖伏 · 体力恢复';
   if (state === 'floating') return '海面浮息 · 体力恢复';
   if (state === 'swimming') return '深水潜息 · 体力恢复';
   if (survival?.rest === 'sky') return '高空滑翔 · 缓慢回息';
