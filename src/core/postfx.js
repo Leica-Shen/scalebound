@@ -1,0 +1,161 @@
+import * as THREE from 'three';
+
+const vertexShader = /* glsl */`
+  varying vec2 vUv;
+  void main() {
+    vUv = uv;
+    gl_Position = vec4(position.xy, 0.0, 1.0);
+  }
+`;
+
+const fragmentShader = /* glsl */`
+  precision highp float;
+  varying vec2 vUv;
+  uniform sampler2D tDiffuse;
+  uniform sampler2D tDither;
+  uniform vec2 uResolution;
+  uniform float uTime;
+  uniform float uSpeed;
+  uniform float uFlash;
+  uniform float uWarmth;
+
+  vec3 toSRGB(vec3 c) {
+    return pow(max(c, vec3(0.0)), vec3(0.454545));
+  }
+
+  void main() {
+    vec2 uv = vUv;
+    vec2 centered = uv - 0.5;
+    float radius = length(centered);
+
+    // A tiny radial lens push when sprinting; keeps the pixel grid intact.
+    uv += centered * radius * uSpeed * 0.0075;
+
+    vec2 texel = 1.0 / uResolution;
+    float edge = smoothstep(0.1, 0.62, radius);
+    vec2 ca = centered * texel * (1.0 + uSpeed * 2.4) * edge;
+
+    vec3 c;
+    c.r = texture2D(tDiffuse, uv + ca).r;
+    c.g = texture2D(tDiffuse, uv).g;
+    c.b = texture2D(tDiffuse, uv - ca).b;
+
+    // A little extra gleam in the brightest pixels, sampled as a cheap bloom.
+    vec3 n = texture2D(tDiffuse, uv + vec2(texel.x * 2.5, 0.0)).rgb;
+    vec3 n2 = texture2D(tDiffuse, uv - vec2(0.0, texel.y * 2.5)).rgb;
+    float bright = max(0.0, dot(max(c, max(n, n2)), vec3(0.3, 0.58, 0.12)) - 0.74);
+    c += bright * vec3(1.0, 0.64, 0.3) * 0.18;
+
+    vec3 srgb = toSRGB(c);
+
+    // warm highlights, cool shadows — a unified dusk grade for all dragons
+    float luma = dot(srgb, vec3(0.299, 0.587, 0.114));
+    srgb = mix(srgb, srgb * vec3(1.06, 1.015, 0.94), uWarmth);
+    srgb = mix(srgb * vec3(0.9, 0.98, 1.07), srgb, smoothstep(0.04, 0.66, luma));
+    float luma2 = dot(srgb, vec3(0.299, 0.587, 0.114));
+    srgb = mix(vec3(luma2), srgb, 1.14);
+    srgb = clamp((srgb - 0.5) * 1.08 + 0.515, 0.0, 1.0);
+
+    // ordered 4×4 dither + palette stepping: the core of the pixel look
+    float d = texture2D(tDither, gl_FragCoord.xy / 4.0).r - 0.5;
+    float levels = 38.0;
+    srgb = floor(srgb * levels + d * 0.9 + 0.5) / levels;
+
+    // CRT / print vignette, with a faint warm glow at the horizon
+    float vig = smoothstep(0.86, 0.2, radius);
+    srgb *= mix(0.77, 1.0, vig);
+    float scan = 1.0 - 0.016 * (0.5 + 0.5 * sin(gl_FragCoord.y * 3.14159));
+    srgb *= scan;
+
+    // Roar / pickup flash
+    srgb += uFlash * vec3(0.28, 0.2, 0.1);
+
+    gl_FragColor = vec4(clamp(srgb, 0.0, 1.0), 1.0);
+  }
+`;
+
+export class PixelPipeline {
+  constructor(renderer) {
+    this.renderer = renderer;
+    this.resolution = new THREE.Vector2(640, 360);
+    this.renderHeight = 340;
+    this.quadScene = new THREE.Scene();
+    this.quadCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+
+    const targetOptions = {
+      minFilter: THREE.NearestFilter,
+      magFilter: THREE.NearestFilter,
+      format: THREE.RGBAFormat,
+      depthBuffer: true,
+      stencilBuffer: false,
+      generateMipmaps: false,
+    };
+    this.target = new THREE.WebGLRenderTarget(640, 340, targetOptions);
+    this.target.texture.colorSpace = THREE.SRGBColorSpace;
+
+    // 4x4 Bayer matrix in a tiny nearest-filtered texture
+    const ditherData = new Uint8Array([
+      0, 8, 2, 10,
+      12, 4, 14, 6,
+      3, 11, 1, 9,
+      15, 7, 13, 5,
+    ].map((v) => v * 16 + 8));
+    const dither = new THREE.DataTexture(ditherData, 4, 4, THREE.RedFormat);
+    dither.needsUpdate = true;
+    dither.minFilter = THREE.NearestFilter;
+    dither.magFilter = THREE.NearestFilter;
+
+    this.material = new THREE.ShaderMaterial({
+      depthTest: false,
+      depthWrite: false,
+      uniforms: {
+        tDiffuse: { value: this.target.texture },
+        tDither: { value: dither },
+        uResolution: { value: this.resolution },
+        uTime: { value: 0 },
+        uSpeed: { value: 0 },
+        uFlash: { value: 0 },
+        uWarmth: { value: 1 },
+      },
+      vertexShader,
+      fragmentShader,
+    });
+    const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.material);
+    quad.frustumCulled = false;
+    this.quadScene.add(quad);
+
+    this.cssWidth = 1;
+    this.cssHeight = 1;
+    this.pixelScale = 1;
+    this.resize(window.innerWidth, window.innerHeight);
+  }
+
+  resize(width, height) {
+    this.cssWidth = width;
+    this.cssHeight = height;
+    // The game is rendered at a fixed, deliberately low internal resolution.
+    const h = Math.round(Math.max(264, Math.min(378, height * 0.395)));
+    const w = Math.round(Math.min(940, h * (width / Math.max(1, height))));
+    this.resolution.set(w, h);
+    this.renderHeight = h;
+    this.renderer.setPixelRatio(1);
+    this.renderer.setSize(w, h, false);
+    this.target.setSize(w, h);
+    this.material.uniforms.uResolution.value.set(w, h);
+    this.pixelScale = height / h;
+  }
+
+  render(scene, camera, time, effects = {}) {
+    const renderer = this.renderer;
+    this.material.uniforms.uTime.value = time;
+    this.material.uniforms.uSpeed.value = effects.speed ?? 0;
+    this.material.uniforms.uFlash.value = effects.flash ?? 0;
+    this.material.uniforms.uWarmth.value = effects.warmth ?? 1;
+    renderer.setRenderTarget(this.target);
+    renderer.clear();
+    renderer.render(scene, camera);
+    renderer.setRenderTarget(null);
+    renderer.clear();
+    renderer.render(this.quadScene, this.quadCamera);
+  }
+}

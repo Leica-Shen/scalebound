@@ -1,0 +1,15 @@
+import { chromium } from 'playwright-core';
+const browser = await chromium.launch({ executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true, args: ['--use-angle=metal','--enable-webgl','--ignore-gpu-blocklist'] });
+const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+await page.goto('http://127.0.0.1:5198/?spawn=-2120,-2960,2.23', { waitUntil:'networkidle' });
+await page.waitForFunction(()=>window.__SCALEBOUND__?.ready,{timeout:45000});
+await page.click('#startBtn');
+await page.waitForFunction(()=>window.__SCALEBOUND__.game.mode==='flight',{timeout:10000});
+await page.waitForTimeout(1000);
+await page.evaluate(()=>window.__SCALEBOUND__.finishIntro());
+await page.waitForTimeout(700);
+await page.screenshot({path:'screenshots/sprites-on.png'});
+await page.evaluate(()=>{ window.__SCALEBOUND__.scene.traverse(o=>{ if(o.isSprite) o.visible=false; }); });
+await page.waitForTimeout(400);
+await page.screenshot({path:'screenshots/sprites-off.png'});
+await browser.close();

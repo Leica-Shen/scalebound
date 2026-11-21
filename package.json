@@ -1,0 +1,18 @@
+{
+  "name": "scalebound",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 5198",
+    "build": "vite build",
+    "standalone": "vite build && node scripts/inline-build.mjs"
+  },
+  "dependencies": {
+    "three": "0.187.0"
+  },
+  "devDependencies": {
+    "playwright-core": "1.65.1",
+    "vite": "7.1.7"
+  }
+}
