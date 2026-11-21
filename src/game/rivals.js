@@ -132,6 +132,7 @@ export class RivalDragons {
       yaw: root.group.rotation.y, hp: 64 + (dragon.stats?.endurance||80)*0.35,
       maxHp: 0, state: 'patrol', waypoint: new THREE.Vector3(x+(Math.random()-0.5)*180,y+20,z+(Math.random()-0.5)*180),
       attackCd: 2 + Math.random()*3, aggression: 0.28 + Math.random()*0.55, alive: true, respawn: 0, flap: Math.random()*6.28,
+      energy: 0.55 + Math.random()*0.4, hunger: 0.25 + Math.random()*0.45, stateTimer: 0,
     };
     npc.maxHp = npc.hp;
     this.list.push(npc);
@@ -157,25 +158,56 @@ export class RivalDragons {
         continue;
       }
       if (n.attackCd > 0) n.attackCd -= dt;
-      // A rival that gets close becomes territorial. Some patrol peacefully;
-      // the aggressive minority turns into a real encounter.
-      if (dist < 155 && n.aggression > 0.34) n.state = 'chase';
-      else if (dist < 52 && n.aggression < 0.3) n.state = 'flee';
-      else if (n.state === 'chase' && dist > 220) n.state = 'patrol';
+      // Living-state clock: rivals hunt when hungry, rest when exhausted, and
+      // break off to fight the player or each other when blood is up.
+      n.energy = clamp(n.energy - dt * (n.state === 'chase' ? 0.022 : 0.005), 0, 1);
+      n.hunger = clamp(n.hunger + dt * 0.011, 0, 1);
+      if (n.stateTimer > 0) {
+        n.stateTimer -= dt;
+        if (n.state === 'rest') {
+          n.energy = Math.min(1, n.energy + dt * 0.065);
+          if (n.energy > 0.72) { n.state = 'patrol'; n.stateTimer = 0; }
+        } else if (n.state === 'hunt') {
+          n.hunger = Math.max(0, n.hunger - dt * 0.045);
+          if (n.hunger < 0.32) { n.state = 'patrol'; n.stateTimer = 0; }
+        }
+      }
+      if (n.stateTimer <= 0 && (n.state === 'rest' || n.state === 'hunt')) n.state = 'patrol';
+      if (n.stateTimer > 0) {
+        // handled above
+      } else if (dist < 155 && n.aggression > 0.34) {
+        n.state = 'chase';
+      } else if (n.energy < 0.24) {
+        n.state = 'rest'; n.stateTimer = 7 + Math.random()*5;
+        n.waypoint.set(n.pos.x + (Math.random()-0.5)*80, Math.max(SEA_LEVEL+18, heightAt(n.pos.x,n.pos.z)+24), n.pos.z + (Math.random()-0.5)*80);
+      } else if (n.hunger > 0.74) {
+        n.state = 'hunt'; n.stateTimer = 8 + Math.random()*5;
+        n.waypoint.set(n.pos.x + (Math.random()-0.5)*150, Math.max(SEA_LEVEL+16, heightAt(n.pos.x,n.pos.z)+28), n.pos.z + (Math.random()-0.5)*150);
+      } else if (dist < 52 && n.aggression < 0.3) {
+        n.state = 'flee';
+      } else if (n.state === 'chase' && dist > 220) {
+        n.state = 'patrol';
+      }
       if (n.state === 'chase') {
         n.waypoint.copy(playerPos);
       } else if (n.state === 'flee') {
         n.waypoint.copy(n.pos).addScaledVector(toPlayer.normalize(), 90);
+      } else if (n.state === 'rest') {
+        // hover low and slow to recover; this reads as a dragon bedding down.
+        n.waypoint.y = Math.max(SEA_LEVEL+18, heightAt(n.pos.x,n.pos.z)+24);
+      } else if (n.state === 'hunt') {
+        n.waypoint.y = Math.max(SEA_LEVEL+16, heightAt(n.waypoint.x,n.waypoint.z)+30);
       } else if (n.state === 'patrol' && n.pos.distanceTo(n.waypoint) < 20) {
         n.waypoint.set(n.pos.x + (Math.random()-0.5)*260, Math.max(SEA_LEVEL+30, heightAt(n.pos.x,n.pos.z)+40+Math.random()*55), n.pos.z + (Math.random()-0.5)*260);
       }
       const toTarget = _v2.copy(n.waypoint).sub(n.pos);
       const targetYaw = Math.atan2(toTarget.x, toTarget.z);
       n.yaw = lerp(n.yaw, targetYaw, 1-Math.exp(-1.7*dt));
-      const speed = n.state === 'chase' ? 30 : (n.state === 'flee' ? 27 : 20);
+      const speed = n.state === 'chase' ? 30 : (n.state === 'flee' ? 27 : (n.state === 'rest' ? 9 : 20));
       n.pos.x += Math.sin(n.yaw) * speed * dt;
       n.pos.z += Math.cos(n.yaw) * speed * dt;
       const targetY = n.state === 'chase' ? playerPos.y + 7 : n.waypoint.y;
+      if (n.state === 'rest') n.pos.y = damp(n.pos.y, n.waypoint.y, 1.2, dt);
       n.pos.y = damp(n.pos.y, targetY, 0.65, dt);
       const g = heightAt(n.pos.x,n.pos.z);
       n.pos.y = Math.max(n.pos.y, (g<SEA_LEVEL?SEA_LEVEL:g)+14);
