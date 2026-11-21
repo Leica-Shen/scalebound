@@ -37,7 +37,7 @@ const fragmentShader = /* glsl */`
 
     vec2 texel = 1.0 / uResolution;
     float edge = smoothstep(0.1, 0.62, radius);
-    vec2 ca = centered * texel * (1.0 + uSpeed * 2.4) * edge;
+    vec2 ca = centered * texel * (1.0 + uSpeed * 2.4) * edge * (1.0 - uChinese * 0.92);
 
     vec3 c;
     c.r = texture2D(tDiffuse, uv + ca).r;
@@ -96,10 +96,12 @@ const fragmentShader = /* glsl */`
       srgb = mix(srgb, wash, uChinese);
     }
 
-    // ordered 4×4 dither + palette stepping: the core of the pixel look
-    float d = texture2D(tDither, gl_FragCoord.xy / 4.0).r - 0.5;
-    float levels = mix(38.0, 58.0, uChinese);
-    srgb = floor(srgb * levels + d * (0.9 - 0.55 * uChinese) + 0.5) / levels;
+    // Pixel editions keep the ordered 4×4 dither; C is a continuous wash.
+    if (uChinese < 0.5) {
+      float d = texture2D(tDither, gl_FragCoord.xy / 4.0).r - 0.5;
+      float levels = 38.0;
+      srgb = floor(srgb * levels + d * 0.9 + 0.5) / levels;
+    }
 
     // CRT / print vignette, with a faint warm glow at the horizon
     float vig = smoothstep(0.86, 0.2, radius);
@@ -118,6 +120,7 @@ const fragmentShader = /* glsl */`
 export class PixelPipeline {
   constructor(renderer) {
     this.renderer = renderer;
+    this.chinese = typeof window !== 'undefined' && !!window.__SCALEBOUND_CN__;
     this.resolution = new THREE.Vector2(640, 360);
     this.renderHeight = 340;
     this.quadScene = new THREE.Scene();
@@ -133,6 +136,10 @@ export class PixelPipeline {
     };
     this.target = new THREE.WebGLRenderTarget(640, 340, targetOptions);
     this.target.texture.colorSpace = THREE.SRGBColorSpace;
+    if (this.chinese) {
+      this.target.texture.minFilter = THREE.LinearFilter;
+      this.target.texture.magFilter = THREE.LinearFilter;
+    }
 
     // 4x4 Bayer matrix in a tiny nearest-filtered texture
     const ditherData = new Uint8Array([
@@ -178,14 +185,26 @@ export class PixelPipeline {
   resize(width, height) {
     this.cssWidth = width;
     this.cssHeight = height;
-    // The game is rendered at a fixed, deliberately low internal resolution.
-    const h = Math.round(Math.max(264, Math.min(378, height * 0.395)));
-    const w = Math.round(Math.min(940, h * (width / Math.max(1, height))));
+    // Pixel editions use a fixed low internal resolution. The C edition is
+    // painted at near-native resolution with smooth filtering: no pixel grid,
+    // no palette quantization, no dithering.
+    const scale = this.chinese ? Math.min(1, 1440 / Math.max(1, width), 900 / Math.max(1, height)) : 1;
+    const h = this.chinese
+      ? Math.max(480, Math.round(height * scale))
+      : Math.round(Math.max(264, Math.min(378, height * 0.395)));
+    const w = this.chinese
+      ? Math.round(width * scale)
+      : Math.round(Math.min(940, h * (width / Math.max(1, height))));
     this.resolution.set(w, h);
     this.renderHeight = h;
     this.renderer.setPixelRatio(1);
     this.renderer.setSize(w, h, false);
     this.target.setSize(w, h);
+    if (this.chinese) {
+      this.target.texture.minFilter = THREE.LinearFilter;
+      this.target.texture.magFilter = THREE.LinearFilter;
+      this.target.texture.needsUpdate = true;
+    }
     this.material.uniforms.uResolution.value.set(w, h);
     this.pixelScale = height / h;
   }

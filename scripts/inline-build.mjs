@@ -33,6 +33,14 @@ console.log(`Beta preview → ${betaOut} (${(fs.statSync(betaOut).size / 1024 / 
 const cn = html
   .replace('<head>', '<head>\n  <script>window.__SCALEBOUND_CN__ = true;</script>')
   .replace(/<title>[^<]*<\/title>/, '<title>鳞界 · 山河龙谱 C · SCALEBOUND</title>');
+let cnHtml = cn;
+const fontPath = path.join(root, 'assets', 'MaShanZheng-Regular.ttf');
+if (fs.existsSync(fontPath)) {
+  const font64 = fs.readFileSync(fontPath).toString('base64');
+  cnHtml = cnHtml.replace('</head>', `<style>@font-face{font-family:"MaShanZheng";src:url(data:font/ttf;base64,${font64}) format("truetype");font-weight:400;font-style:normal;font-display:swap;}</style></head>`);
+} else {
+  console.warn('Brush font missing; C edition will use system Songti.');
+}
 const cnOut = path.join(root, 'scalebound-cn.html');
-fs.writeFileSync(cnOut, cn);
+fs.writeFileSync(cnOut, cnHtml);
 console.log(`China edition → ${cnOut} (${(fs.statSync(cnOut).size / 1024 / 1024).toFixed(2)} MB)`);

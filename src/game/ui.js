@@ -175,13 +175,13 @@ export class UI {
 
   setBeta(on) {
     document.documentElement.classList.toggle('is-beta', !!on);
-    [this.el.betaFlag, this.el.hudAutoBtn, ...document.querySelectorAll('.beta-only')].forEach((el) => el?.classList.toggle('is-hidden', !on));
+    [this.el.betaFlag, ...document.querySelectorAll('.beta-only')].forEach((el) => el?.classList.toggle('is-hidden', !on));
     if (!on) this.el.combatPanel?.classList.add('is-hidden');
   }
 
   setAutoFlight(on) {
     this.el.hudAutoBtn?.classList.toggle('is-active', !!on);
-    if (this.el.hudAutoBtn) this.el.hudAutoBtn.title = on ? '自动飞行：开 (B)' : '自动飞行：关 (B)';
+    if (this.el.hudAutoBtn) this.el.hudAutoBtn.title = on ? '自由飞行：开 (B)' : '自由飞行：关 (B)';
   }
 
   setCombatState({ health = 100, target = null, auto = false } = {}) {

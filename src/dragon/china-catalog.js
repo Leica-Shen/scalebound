@@ -112,7 +112,7 @@ export const CHINA_DRAGONS = [
     stats: { speed: 84, agility: 78, endurance: 87, majesty: 86 },
     traitName: '睚眦必报', traitDesc: '地面与火边恢复更快；可捕食岩羊、飞鸟。体力较低，但俯冲与转向极快。',
     flight: { cruise: 32, max: 48, turn: 1.6, lift: 1.02, regen: 9.5, flapCost: 9.2, boost: 1.12, dive: 1.28, pickup: 1.08 },
-    archetype: 'eastern', landing: land(false, false),
+    archetype: 'eastern', restPose: 'crouch', landing: land(false, false),
     survival: { diet: ['sheep','birds'], rest: 'ground', groundRest: 1.3, waterRest: 0.8, skyRest: 0.22, special: 'sun', comfort: [-6,40], hungerRate: 0.86 },
     ability: { id: 'fire', name: '睚眦怒焰', element: 'fire', cooldown: 8.5, desc: '兵主怒焰沿兵刃般的背鳍喷出，点燃林梢，也烧穿退路。' },
     palette: P({ base:'#7d3e35', dark:'#381b1b', light:'#c88766', belly:'#d7b27b', accent:'#f2b35c', accent2:'#e6d6a2', horn:'#d8c38d', membrane:'#8f4332', membraneLight:'#e29a5e', eye:'#ffe070', glow:'#ff9b55', metal:'#c8aa72' }),

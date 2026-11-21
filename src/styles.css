@@ -2595,10 +2595,11 @@ kbd { font-size: 8px; min-width: 18px; height: 17px; }
   font-size: 8px; letter-spacing: .18em; pointer-events: none;
 }
 .is-cn .cn-flag { display: block; }
-.is-cn body, .is-cn button, .is-cn .wordmark h1, .is-cn .sel-name, .is-cn .modal-panel h2 {
-  font-family: "Songti SC", "STSong", "Kaiti SC", "Hiragino Sans GB", serif;
+.is-cn body, .is-cn button {
+  font-family: "Kaiti SC", "STKaiti", "Songti SC", serif;
   letter-spacing: .1em;
 }
+.is-cn #scene { image-rendering: auto; }
 .is-cn .fx-scan { display: none; }
 .is-cn .fx-grain { opacity: .035; mix-blend-mode: multiply; }
 .is-cn .speed-fx { opacity: .22 !important; }
@@ -2705,3 +2706,51 @@ kbd { font-size: 8px; min-width: 18px; height: 17px; }
 .is-cn .dragon-chip small { color: #b8a582; }
 .is-cn .menu-footer { background: rgba(5,9,8,.75); }
 .is-cn .menu-top .menu-ribbon { color: #dbc596; }
+
+.is-cn .wordmark h1, .is-cn .sel-name, .is-cn .menu-copy h2, .is-cn .modal-panel h2,
+.is-cn .biome-title h3, .is-cn .intro-name, .is-cn .hud-identity h2 {
+  font-family: "MaShanZheng", "Kaiti SC", "STKaiti", "Songti SC", serif !important;
+  font-weight: 400 !important; letter-spacing: .12em;
+}
+.is-cn .sel-desc, .is-cn .sel-quote, .is-cn .trait-desc, .is-cn .help-grid dd,
+.is-cn .menu-footer, .is-cn .dragon-chip b, .is-cn .dragon-chip small {
+  font-family: "Kaiti SC", "STKaiti", "Songti SC", serif !important; font-size: 10px;
+}
+
+.is-cn .vitals-panel, .is-cn .ability-slot, .is-cn .action-prompt, .is-cn .toast,
+.is-cn .control-ribbon, .is-cn .run-stat, .is-cn .combat-panel { letter-spacing: .06em; }
+.is-cn .vital-row > span, .is-cn .vital-row > b, .is-cn .vitals-head,
+.is-cn .world-mini, .is-cn .ability-copy, .is-cn .action-prompt { font-family: "Songti SC", "STSong", "Kaiti SC", serif !important; }
+.is-cn .vital-row > span { font-size: 9px; }
+.is-cn .vitals-foot, .is-cn .world-mini { font-size: 8px; }
+.is-cn .compass { font-family: "Songti SC", serif; }
+.is-cn .btn-primary, .is-cn .primary-btn { font-family: "MaShanZheng", "Kaiti SC", serif; font-size: 15px; }
+
+/* C edition: the left column becomes a hanging paper scroll, not a dark menu. */
+.is-cn .menu-copy {
+  background: linear-gradient(180deg, rgba(240,233,215,.94), rgba(230,221,201,.88));
+  padding: 16px 18px 14px;
+  margin: 10px 0 10px calc(var(--ui-pad) - 16px);
+  border: 1px solid rgba(104,78,45,.42);
+  box-shadow: 0 16px 50px rgba(23,18,12,.22);
+  position: relative;
+}
+.is-cn .menu-copy::after {
+  content: '鳞'; position: absolute; right: 10px; bottom: 12px;
+  width: 28px; height: 28px; display: grid; place-items: center;
+  border: 1px solid #9b3b2a; color: #9b3b2a;
+  font-family: "MaShanZheng", "Kaiti SC", serif; font-size: 17px;
+  opacity: .72; pointer-events: none;
+}
+.is-cn .menu-copy, .is-cn .menu-copy * { color: #30281e !important; text-shadow: none !important; }
+.is-cn .menu-copy .wordmark h1 { color: #1e1a15 !important; }
+.is-cn .menu-copy .eyebrow, .is-cn .menu-copy .sel-index, .is-cn .menu-copy .sel-roman,
+.is-cn .menu-copy .trait-name, .is-cn .menu-copy .species-row b { color: #963a29 !important; }
+.is-cn .menu-copy .sel-desc, .is-cn .menu-copy .sel-quote, .is-cn .menu-copy .trait-desc,
+.is-cn .menu-copy .stat-row, .is-cn .menu-copy .menu-keyhint { color: #4c3d2b !important; }
+.is-cn .menu-copy .sel-en { color: #806b4f !important; }
+.is-cn .menu-copy .primary-btn { background: #8f3126 !important; color: #f6e8ca !important; border-color: #b86b4e !important; }
+.is-cn .menu-copy .primary-btn * { color: #f6e8ca !important; }
+.is-cn .menu-copy .ghost-btn { color: #493725 !important; border-color: rgba(104,78,45,.48) !important; }
+.is-cn .menu-copy .ghost-btn * { color: #493725 !important; }
+.is-cn .menu-copy .stat-bar i, .is-cn .menu-copy .stat-meter i { background: #7b5a36 !important; }

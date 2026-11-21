@@ -1141,23 +1141,19 @@ export class Game {
   }
 
   toggleAutoFlight() {
-    if (!this.beta) {
-      this.ui.toast('自动飞行属于 Beta 前瞻功能 · 请打开 scalebound-beta.html', { duration: 2800, strong: true });
-      return;
-    }
     if (this.mode !== 'flight') return;
     this.autoPilot = !this.autoPilot;
     this.autoInput = { pitchIn: 0, turnIn: 0 };
     this.ui.setAutoFlight(this.autoPilot);
     this.ui.toast(
-      this.autoPilot ? 'Beta · 自动飞行开启：巡航 / 捕食 / 休整' : 'Beta · 自动飞行关闭',
+      this.autoPilot ? (this.beta ? 'Beta · 自由飞行开启：巡航 / 捕食 / 休整 / 自动战斗' : '自由飞行开启：巡航 / 捕食 / 休整') : '自由飞行关闭',
       { duration: 2400, strong: true },
     );
     if (this.autoPilot && (this.flightState === 'grounded' || this.flightState === 'floating')) this._takeOff();
   }
 
   _updateAutopilot(dt) {
-    if (!this.beta || !this.autoPilot) return;
+    if (!this.autoPilot) return;
     this.autoInput = this.autoInput || { pitchIn: 0, turnIn: 0 };
     this.autoInput.pitchIn = 0;
     this.autoInput.turnIn = 0;
@@ -1174,7 +1170,7 @@ export class Game {
       return;
     }
     // Beta AI decision tree: conflicts first, then hunger, then a safe patrol.
-    const rival = this.rivals?.nearest(this.playerPos, 190);
+    const rival = this.beta ? this.rivals?.nearest(this.playerPos, 190) : null;
     let target = null;
     let mode = '巡航';
     if (rival) {
@@ -1187,7 +1183,7 @@ export class Game {
         this.attackCooldown = 0.55;
         this.attackRival();
       }
-      if (dist < 78 && facing > 0.2 && this.abilityCooldown <= 0.05 && this.stamina > 28) this.castAbility();
+      if (this.beta && dist < 78 && facing > 0.2 && this.abilityCooldown <= 0.05 && this.stamina > 28) this.castAbility();
     } else if (this.satiety < 58) {
       let best = null, bd = 300;
       for (const a of this.wildlife?.animals || []) {
@@ -1359,7 +1355,7 @@ export class Game {
   }
 
   _readFlightControls(locked) {
-    if (this.beta && this.autoPilot && !locked) return this.autoInput || { pitchIn: 0, turnIn: 0 };
+    if (this.autoPilot && !locked) return this.autoInput || { pitchIn: 0, turnIn: 0 };
     let pitchIn = 0;
     let turnIn = 0;
     if (!locked) {
@@ -1391,7 +1387,7 @@ export class Game {
 
   updateFlight(dt) {
     this.time += dt;
-    if (this.beta && this.autoPilot && !this.paused && !this.introActive) this._updateAutopilot(dt);
+    if (this.autoPilot && !this.paused && !this.introActive) this._updateAutopilot(dt);
     if (this.paused) {
       this.audio.setWind(0, false, false);
       return;
@@ -1853,6 +1849,7 @@ export class Game {
     this.attackCooldown = Math.max(0, (this.attackCooldown || 0) - dt);
     if (this.time - this.lastDamageAt > 5) this.combatHealth = Math.min(100, this.combatHealth + dt * 2.2);
     this.rivals?.update(dt, this.playerPos, this.world.environment);
+    this.ui.setAutoFlight?.(this.autoPilot);
     if (this.beta) {
       const r = this.rivals?.nearest(this.playerPos, 220) || null;
       this.combatTarget = r;

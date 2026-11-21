@@ -187,26 +187,31 @@ function resolveModelConfig(catalog) {
   const cfg = JSON.parse(JSON.stringify(catalog.model));
   const arch = catalog.archetype || 'western';
   if (arch === 'eastern') {
+    // Eastern dragons are river-serpents: a long low body, a head carried at
+    // the front rather than an upright S-neck, and no wings except Yinglong.
+    cfg.noWings = !['yinglong', 'yinglong-cn'].includes(catalog.id);
+    cfg.restPose = catalog.restPose || 'coil';
     cfg.body.length *= 1.30;
     cfg.body.width *= 0.64;
     cfg.body.height *= 0.70;
     cfg.body.segments += 2;
     cfg.body.serpentine = true;
-    cfg.neck.count += 2;
-    cfg.neck.length *= 1.22;
+    cfg.neck.count += 1;
+    cfg.neck.length *= 0.98;
     cfg.neck.width *= 0.82;
-    cfg.neck.curve *= 1.06;
+    cfg.neck.curve *= 0.28;
     cfg.tail.segments += 3;
     cfg.tail.length *= 1.30;
     cfg.tail.width *= 0.82;
-    cfg.legs.fore *= 0.56;
-    cfg.legs.hind *= 0.56;
+    cfg.legs.fore *= 0.76;
+    cfg.legs.hind *= 0.76;
     cfg.head.scale *= 0.96;
     cfg.head.hornScale = (cfg.head.hornScale || 1) * 1.06;
     cfg.head.whiskers = Math.max(2, cfg.head.whiskers || 0);
-    cfg.wing.span *= 0.84;
-    cfg.wing.sweep = (cfg.wing.sweep || 0.3) + 0.05;
+    if (cfg.wing) cfg.wing.span *= 0.84;
+    if (cfg.wing) cfg.wing.sweep = (cfg.wing.sweep || 0.3) + 0.05;
   } else if (arch === 'western') {
+    cfg.restPose = catalog.restPose || 'crouch';
     cfg.body.length *= 0.94;
     cfg.body.width *= 1.22;
     cfg.body.height *= 1.10;
@@ -218,6 +223,7 @@ function resolveModelConfig(catalog) {
     cfg.wing.span *= 1.04;
     cfg.tail.width *= 1.10;
   } else {
+    cfg.restPose = catalog.restPose || 'crouch';
     // The Mushussu sits between the two worlds: a serpent neck on lion/eagle legs.
     cfg.body.length *= 1.08;
     cfg.body.width *= 1.05;
@@ -229,11 +235,19 @@ function resolveModelConfig(catalog) {
     cfg.wing.span *= 0.98;
   }
   if (catalog.id === 'wuzhao') {
-    // The imperial dragon flies on ribbons of cloud, not a leathery sail.
-    cfg.wing.type = 'ribbon';
-    cfg.wing.sail = false;
-    cfg.wing.span *= 1.1;
-    cfg.extra.ribbons = true;
+    // The popular Chinese celestial serpent: no wings, an even longer torso,
+    // and a very low, forward-carried head.
+    cfg.noWings = true;
+    cfg.restPose = 'coil';
+    cfg.body.length *= 1.12;
+    cfg.body.width *= 0.92;
+    cfg.body.height *= 0.88;
+    cfg.body.segments += 1;
+    cfg.neck.curve = 0.12;
+    cfg.neck.length *= 0.82;
+    cfg.extra.ribbons = false;
+    cfg.legs.fore *= 1.08;
+    cfg.legs.hind *= 1.08;
   }
   return cfg;
 }
@@ -543,7 +557,8 @@ function buildNeck(inner, cfg, mats, rig) {
   const { W, H, L } = rig.dimensions;
   const nCfg = cfg.neck;
   const root = new THREE.Group();
-  root.position.set(0, H * 0.24, L * 0.48);
+  const lowNeck = rig.archetype === 'eastern';
+  root.position.set(0, H * (lowNeck ? 0.09 : 0.24), L * (lowNeck ? 0.5 : 0.48));
   inner.add(root);
   let parent = root;
   const segLen = nCfg.length / nCfg.count;
@@ -553,7 +568,9 @@ function buildNeck(inner, cfg, mats, rig) {
     const t = nCfg.count === 1 ? 0 : i / (nCfg.count - 1);
     const g = new THREE.Group();
     if (i > 0) g.position.z = segLen * 0.96;
-    const baseX = lerp(-0.37, 0.13, t) * nCfg.curve;
+    const baseX = lowNeck
+      ? lerp(-0.16, 0.02, t) * nCfg.curve * 0.42
+      : lerp(-0.37, 0.13, t) * nCfg.curve;
     g.rotation.x = baseX;
     parent.add(g);
     parent = g;
@@ -588,7 +605,7 @@ function buildNeck(inner, cfg, mats, rig) {
   const head = new THREE.Group();
   head.position.z = segLen * 0.98;
   const cumulative = basePitch.reduce((a, b) => a + b, 0);
-  head.rotation.x = -cumulative + 0.06;
+  head.rotation.x = -cumulative + (lowNeck ? 0.02 : 0.06);
   head.rotation.y = 0;
   parent.add(head);
   rig.neck = segments;
@@ -1289,6 +1306,7 @@ function yawFor(t) {
 // Wings
 // ───────────────────────────────────────────────────────────────────────────
 function buildWings(inner, cfg, mats, rig) {
+  if (cfg.noWings) { rig.wings = []; rig.ribbons = []; return; }
   const wings = [];
   for (const side of [-1, 1]) {
     const wing = buildWing(inner, cfg, mats, rig, side);
