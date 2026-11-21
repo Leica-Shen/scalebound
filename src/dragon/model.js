@@ -550,6 +550,39 @@ function buildDorsalSpines(parent, cfg, mats, L, H) {
   }
 }
 
+// Split the rigid bodyGroup into a short chain of pivot groups. The torso can
+// then follow the spine wave as a set of flexible sections instead of one slab.
+function sectionizeBodyGroup(group) {
+  if (!group || group.children.length < 8) return [];
+  group.updateMatrixWorld(true);
+  const children = [...group.children];
+  const boxes = children.map((o) => new THREE.Box3().setFromObject(o));
+  let minZ = Infinity, maxZ = -Infinity;
+  for (const b of boxes) { minZ = Math.min(minZ, b.min.z); maxZ = Math.max(maxZ, b.max.z); }
+  if (!Number.isFinite(minZ) || maxZ - minZ < 0.1) return [];
+  const count = 5;
+  const sections = [];
+  for (let i = 0; i < count; i++) {
+    const pivot = minZ + (i + 0.5) / count * (maxZ - minZ);
+    const g = new THREE.Group();
+    g.name = `body-section-${i}`;
+    g.position.z = pivot;
+    g.userData.baseZ = pivot;
+    group.add(g);
+    sections.push(g);
+  }
+  children.forEach((child, i) => {
+    const b = boxes[i];
+    const z = (b.min.z + b.max.z) * 0.5;
+    const idx = clamp(Math.floor((z - minZ) / (maxZ - minZ) * count), 0, count - 1);
+    const sec = sections[idx];
+    group.remove(child);
+    sec.add(child);
+    child.position.z -= sec.position.z;
+  });
+  return sections;
+}
+
 // ───────────────────────────────────────────────────────────────────────────
 // Neck & head
 // ───────────────────────────────────────────────────────────────────────────
@@ -1896,6 +1929,7 @@ export function buildDragon(catalog) {
   // The outermost body root gives us secondary bob and roll without touching
   // the physics orientation.
   buildBody(inner, cfg, mats, rig);
+  rig.bodySections = sectionizeBodyGroup(rig.bodyGroup);
   buildNeck(inner, cfg, mats, rig);
   buildLegs(inner, cfg, mats, rig);
   buildTail(inner, cfg, mats, rig);

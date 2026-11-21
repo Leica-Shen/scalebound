@@ -298,12 +298,13 @@ export class World {
     this.terrainMaterial.onBeforeCompile = (shader) => {
       shader.uniforms.uSeason = this.terrainUniforms.season;
       shader.uniforms.uSnowCover = this.terrainUniforms.snow;
+      shader.uniforms.uChinese = { value: CN ? 1 : 0 };
       shader.vertexShader = 'varying vec3 vTWorld;\n' + shader.vertexShader;
       shader.vertexShader = shader.vertexShader.replace(
         '#include <begin_vertex>',
         '#include <begin_vertex>\n  vTWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;',
       );
-      shader.fragmentShader = 'varying vec3 vTWorld;\nuniform float uSeason;\nuniform float uSnowCover;\n' + shader.fragmentShader;
+      shader.fragmentShader = 'varying vec3 vTWorld;\nuniform float uSeason;\nuniform float uSnowCover;\nuniform float uChinese;\n' + shader.fragmentShader;
       shader.fragmentShader = shader.fragmentShader.replace(
         '#include <color_fragment>',
         `#include <color_fragment>
@@ -322,6 +323,23 @@ export class World {
         diffuseColor.rgb = mix(diffuseColor.rgb, autumnTint, greenness * step(1.5, uSeason) * (1.0 - step(2.5, uSeason)) * 0.92);
         float winter = step(2.5, uSeason) * uSnowCover;
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.9, 0.93, 0.91), greenness * winter * 0.95);
+        if (uChinese > 0.5) {
+          // C edition: broad mineral washes and height contours replace the
+          // blocky per-quad checkerboard of the pixel editions.
+          float h = vTWorld.y;
+          float hm = smoothstep(-4.0, 150.0, h);
+          vec3 valley = vec3(0.20, 0.28, 0.23);
+          vec3 mid = vec3(0.34, 0.41, 0.30);
+          vec3 peak = vec3(0.58, 0.56, 0.43);
+          vec3 wash = mix(valley, mid, smoothstep(0.0, 0.55, hm));
+          wash = mix(wash, peak, smoothstep(0.45, 1.0, hm));
+          float contour = abs(fract(h * 0.115 + 0.04) - 0.5);
+          float ink = 1.0 - smoothstep(0.035, 0.095, contour);
+          wash = mix(wash, vec3(0.09, 0.12, 0.10), ink * 0.30);
+          float brush = sin(vTWorld.x * 0.055 + vTWorld.z * 0.037) * sin(vTWorld.z * 0.071 - vTWorld.x * 0.021);
+          wash += brush * 0.018 + (tn1 - 0.5) * 0.018;
+          diffuseColor.rgb = wash;
+        }
         `,
       );
     };

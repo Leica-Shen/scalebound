@@ -1197,13 +1197,14 @@ export class Game {
       }
     }
     if (!target) {
-      if (!this.autoWaypoint || this.autoWaypoint.distanceTo(this.playerPos) < 45) {
-        const a = this.yaw + (Math.random() - 0.5) * 1.8;
-        const x = this.playerPos.x + Math.sin(a) * 260;
-        const z = this.playerPos.z + Math.cos(a) * 260;
-        this.autoWaypoint = new THREE.Vector3(x, Math.max(this.world.getHeight(x, z), SEA_LEVEL) + 72, z);
-      }
+      const wp = this.autoWaypoint;
+      const invalid = !wp
+        || wp.distanceTo(this.playerPos) < 48
+        || heightAt(wp.x, wp.z) < SEA_LEVEL + 2.5
+        || Math.hypot(wp.x - this.playerPos.x, wp.z - this.playerPos.z) > 720;
+      if (invalid) this._nextLoiterWaypoint();
       target = this.autoWaypoint;
+      mode = this.autoLoiterMode || '环岛';
     }
     const lowStamina = this.stamina < this.maxStamina * 0.17;
     const inCombat = mode === '遭遇';
@@ -1230,6 +1231,60 @@ export class Game {
       this.autoNextFlap = this.time + 1.9;
       this.doFlap(true);
     }
+  }
+
+  _nextLoiterWaypoint() {
+    // Free flight is a coastal creature, not a pelican crossing an empty ocean:
+    // score a ring of land points, strongly favouring shorelines and nearby
+    // islands, then keep circling that island instead of random drift.
+    const px = this.playerPos.x;
+    const pz = this.playerPos.z;
+    const playerOnLand = heightAt(px, pz) > SEA_LEVEL + 2.5;
+    const anchor = this.autoAnchor;
+    const anchorUseful = anchor && Math.hypot(anchor.x - px, anchor.z - pz) < 720
+      && heightAt(anchor.x, anchor.z) > SEA_LEVEL + 2.5;
+    let best = null;
+    let bestScore = -Infinity;
+    const radii = playerOnLand ? [150, 230, 330, 460] : [110, 180, 280, 420, 620, 860];
+    for (let ring = 0; ring < radii.length; ring++) {
+      const r = radii[ring];
+      for (let i = 0; i < 24; i++) {
+        const a = (i / 24) * Math.PI * 2 + Math.sin((px + pz) * 0.001) * 0.6;
+        const x = (anchorUseful ? anchor.x : px) + Math.cos(a) * r;
+        const z = (anchorUseful ? anchor.z : pz) + Math.sin(a) * r;
+        const h = heightAt(x, z);
+        if (h < SEA_LEVEL + 2.5) continue;
+        let shore = 0;
+        for (let k = 0; k < 4; k++) {
+          const sa = a + k * 1.5707963;
+          if (heightAt(x + Math.cos(sa) * 52, z + Math.sin(sa) * 52) < SEA_LEVEL + 1.0) shore++;
+        }
+        const dp = Math.hypot(x - px, z - pz);
+        const da = anchorUseful ? Math.hypot(x - anchor.x, z - anchor.z) : dp;
+        const distScore = playerOnLand ? -Math.abs(da - 230) * 0.55 : -dp * 0.8;
+        const islandScore = shore * 92 + (h > SEA_LEVEL + 3 && h < 55 ? 26 : 0) - Math.max(0, h - 105) * 1.6;
+        const repeatScore = anchorUseful ? 40 : 0;
+        const score = distScore + islandScore + repeatScore + Math.sin(i * 2.1) * 7;
+        if (score > bestScore) {
+          bestScore = score;
+          best = { x, z, h, shore };
+        }
+      }
+      if (best && ring >= 1) break;
+    }
+    if (!best) {
+      // Open-water fallback: return toward the authored land spawn.
+      const sx = this.spawn?.x ?? 0;
+      const sz = this.spawn?.z ?? 0;
+      this.autoAnchor = null;
+      this.autoLoiterMode = '归岸';
+      this.autoWaypoint = new THREE.Vector3(sx, Math.max(heightAt(sx, sz), SEA_LEVEL) + 58, sz);
+      return;
+    }
+    this.autoAnchor = { x: best.x, z: best.z };
+    this.autoLoiterMode = best.shore > 0 ? '环岛' : '巡岸';
+    this.autoWaypoint = new THREE.Vector3(best.x, best.h + (best.shore > 0 ? 48 : 60), best.z);
+    this.autoLoiterPoint = best;
   }
 
   attackRival() {

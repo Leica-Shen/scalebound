@@ -418,6 +418,26 @@ export class DragonAnimator {
       rig.tailTipGroup.rotation.z = Math.sin(tailClock * 0.8) * 0.03;
     }
 
+    // ── flexible torso sections ────────────────────────────────────────────
+    if (rig.bodySections && rig.bodySections.length) {
+      const eastern = rig.archetype === 'eastern';
+      const n = rig.bodySections.length;
+      const long = rig.catalog.id === 'wuzhao' ? 1.5 : 1;
+      const amp = (eastern ? 0.11 : 0.05) * long * (1 + ss.speed * 0.4);
+      const lateral = (eastern ? 0.26 : 0.10) * long * (0.75 + ss.speed * 0.55);
+      for (let i = 0; i < n; i++) {
+        const sec = rig.bodySections[i];
+        const f = n <= 1 ? 0 : i / (n - 1);
+        const taper = 0.3 + Math.sin(Math.PI * f) * 0.7;
+        const wave = Math.sin(t * 1.55 - i * 0.78) * amp;
+        sec.rotation.y = damp(sec.rotation.y, wave - ss.turn * 0.022 * f, 2.4, dt);
+        sec.rotation.x = damp(sec.rotation.x, -ss.pitch * 0.12 * (0.25 + f) + Math.sin(t * 1.2 - i * 0.4) * 0.022, 2.2, dt);
+        sec.rotation.z = damp(sec.rotation.z, Math.sin(t * 1.1 - i * 0.5) * 0.022 - ss.roll * 0.022 * f, 2.0, dt);
+        sec.position.x = damp(sec.position.x, Math.sin(t * 1.55 - i * 0.72 + 0.6) * lateral * taper, 2.1, dt);
+        sec.position.y = damp(sec.position.y, -ss.pitch * 0.28 * taper * (eastern ? 1 : 0.6), 1.8, dt);
+      }
+    }
+
     // ── ribbons and pennants ───────────────────────────────────────────────
     for (const ribbon of rig.ribbons) {
       for (let i = 0; i < ribbon.segments.length; i++) {
