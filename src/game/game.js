@@ -19,6 +19,7 @@ const _euler = new THREE.Euler(0, 0, 0, 'YXZ');
 const _q = new THREE.Quaternion();
 const _q2 = new THREE.Quaternion();
 const UP = new THREE.Vector3(0, 1, 0);
+const CN = typeof window !== 'undefined' && !!window.__SCALEBOUND_CN__;
 
 const TAU = Math.PI * 2;
 const normAngle = (a) => {
@@ -248,6 +249,12 @@ export class Game {
     this.shadow.renderOrder = 2;
     this.shadow.visible = false;
     this.scene.add(this.shadow);
+    const ringMat = new THREE.MeshBasicMaterial({ color: 0xe7c36d, transparent: true, opacity: 0.65, depthWrite: false, side: THREE.DoubleSide });
+    this.targetRing = new THREE.Mesh(new THREE.RingGeometry(2.2, 2.55, 24), ringMat);
+    this.targetRing.rotation.x = -Math.PI / 2;
+    this.targetRing.visible = false;
+    this.targetRing.renderOrder = 4;
+    this.scene.add(this.targetRing);
   }
 
   _updateShadow(pos) {
@@ -391,7 +398,7 @@ export class Game {
     camera.up.copy(UP);
     camera.lookAt(this.chaseLook);
     camera.rotateY(0.1);
-    camera.fov = 46;
+    camera.fov = CN ? 42 : 46;
     camera.updateProjectionMatrix();
   }
 
@@ -446,7 +453,7 @@ export class Game {
     camera.lookAt(this.chaseLook);
     camera.rotateY(0.08 + Math.sin(this.time * 0.21) * 0.008);
     camera.rotateZ(-0.012);
-    camera.fov = damp(camera.fov, 46, 2.0, dt);
+    camera.fov = damp(camera.fov, CN ? 42 : 46, 2.0, dt);
     camera.updateProjectionMatrix();
 
     if (!this.ui.transitioning) this._emitMenuAura(dt);
@@ -574,6 +581,7 @@ export class Game {
     this.rivals?.setEnabled(this.beta);
     this.ui.setAutoFlight?.(false);
     this.ui.setCombatState?.({ health: 100, target: null, auto: false });
+    if (this.targetRing) this.targetRing.visible = false;
     this.ui.closePause();
     this.ui.closeHelp();
     this.ui.hideIntro();
@@ -1179,6 +1187,7 @@ export class Game {
         this.attackCooldown = 0.55;
         this.attackRival();
       }
+      if (dist < 78 && facing > 0.2 && this.abilityCooldown <= 0.05 && this.stamina > 28) this.castAbility();
     } else if (this.satiety < 58) {
       let best = null, bd = 300;
       for (const a of this.wildlife?.animals || []) {
@@ -1243,6 +1252,7 @@ export class Game {
     this.attackCooldown = 0.9;
     this.shake = Math.max(this.shake, 0.3);
     this.world.effects.burst(this._headPosition(new THREE.Vector3()), this.dragon.palette.accent, 18, 8, 0.24, 0.8);
+    this.world.effects.burst(new THREE.Vector3(hit.pos.x, hit.pos.y + 2, hit.pos.z), hit.variant?.palette?.accent || hit.dragon.palette.accent, 24, 11, 0.28, 1.0);
     this.audio.groundHit(0.25);
     this.ui.toast(
       hit.alive ? `抓咬命中 · ${hit.name} ${Math.max(0, Math.round(hit.hp))} HP` : `击坠 · ${hit.name}`,
@@ -1848,6 +1858,16 @@ export class Game {
       this.combatTarget = r;
       this.ui.setAutoFlight?.(this.autoPilot);
       this.ui.setCombatState?.({ health: this.combatHealth, target: r, auto: this.autoPilot });
+      if (this.targetRing) {
+        this.targetRing.visible = !!r;
+        if (r) {
+          this.targetRing.position.set(r.pos.x, r.pos.y + 7.5, r.pos.z);
+          this.targetRing.rotation.z += dt * 1.8;
+          const pulse = 1 + Math.sin(this.time * 5) * 0.09;
+          this.targetRing.scale.setScalar(pulse);
+          this.targetRing.material.opacity = 0.5 + Math.sin(this.time * 5) * 0.18;
+        }
+      }
     }
     this._updateSurvival(dt);
     this._updateInteractions();
@@ -1987,7 +2007,7 @@ export class Game {
     if (this.dragon.id === 'wuzhao' && this.flightState === 'flying' && this.playerPos.y - SEA_LEVEL > 55 && env.night < 0.35 && env.weatherIndex < 2) {
       return { kind: 'dew', label: '饮露 · 高空清风' };
     }
-    if (this.dragon.id === 'lilong' && env.night > 0.4 && this.playerPos.y - SEA_LEVEL > 25) {
+    if (this.dragon.id === 'chilong' && env.rain > 0.2) {
       return { kind: 'moon', label: '凝月 · 夜穹清辉' };
     }
     if (this.dragon.id === 'yamata' && (this.flightState === 'grounded' || this.flightState === 'floating') && this.regionInfo?.id === 'forest') {
@@ -2080,7 +2100,8 @@ export class Game {
     this.abilityElement = result.element;
     if (this.beta && result.impact) {
       const hitPoint = new THREE.Vector3(result.impact.x, result.impact.y, result.impact.z);
-      const hit = this.rivals?.areaDamage(hitPoint, 34, 26) || 0;
+      const airHit = this.rivals?.playerAttack(this.playerPos, fwd, 26);
+      const hit = (this.rivals?.areaDamage(hitPoint, 34, 26) || 0) + (airHit ? 1 : 0);
       if (hit) this.ui.toast(`龙赋命中 · ${hit} 条非玩家龙`, { duration: 1900 });
     }
     const names = { fire: '赤焰龙息', shadowfire: '冥焰吐息', frost: '琉璃霜息', water: '翻江倒海', nature: '八岐瘴气', star: '星陨天罚', storm: '九霄天雷' };
@@ -2216,7 +2237,7 @@ export class Game {
       this.chaseLook.lerp(_tmp2.set(this.playerPos.x, this.playerPos.y + dims.H * 0.12, this.playerPos.z), 1 - Math.exp(-7 * dt));
       camera.up.copy(UP);
       camera.lookAt(this.chaseLook);
-      camera.fov = damp(camera.fov, 48 + speedNorm * 5, 2.2, dt);
+      camera.fov = damp(camera.fov, (CN ? 44 : 48) + speedNorm * 5, 2.2, dt);
       camera.updateProjectionMatrix();
       this._applyCameraShake();
       return;
@@ -2237,7 +2258,7 @@ export class Game {
       camera.rotateY(-this.orbit.yaw * 0.7);
       camera.rotateX(this.orbit.pitch * 0.5);
       camera.rotateZ(this.roll * 0.2);
-      camera.fov = damp(camera.fov, 64 + speedNorm * 4, 3, dt);
+      camera.fov = damp(camera.fov, (CN ? 60 : 64) + speedNorm * 4, 3, dt);
       camera.updateProjectionMatrix();
       this._applyCameraShake();
       return;
@@ -2260,7 +2281,7 @@ export class Game {
       this.chaseLook.lerp(look, 1 - Math.exp(-6 * dt));
       camera.up.copy(UP);
       camera.lookAt(this.chaseLook);
-      camera.fov = damp(camera.fov, 61 + speedNorm * 4, 2.5, dt);
+      camera.fov = damp(camera.fov, (CN ? 58 : 61) + speedNorm * 4, 2.5, dt);
       camera.updateProjectionMatrix();
       this._applyCameraShake();
       this._decayOrbit(dt, false);
@@ -2282,7 +2303,7 @@ export class Game {
     if (_target.y < groundAtCam + 2.4) _target.y = groundAtCam + 2.4;
     if (this.underwater) _target.y = Math.min(_target.y, SEA_LEVEL - 0.55);
     this._clampCameraThroughTerrain(_target, _tmp2.copy(this.playerPos).setY(this.playerPos.y + dims.H * 0.3));
-    const desiredFov = (cinematic ? 44 : 48) + speedNorm * 7 + (this.boostActive ? 3.5 : 0) + (this.introActive ? 2 : 0) + (this.underwater ? 5 : 0);
+    const desiredFov = (cinematic ? (CN ? 40 : 44) : (CN ? 44 : 48)) + speedNorm * 7 + (this.boostActive ? 3.5 : 0) + (this.introActive ? 2 : 0) + (this.underwater ? 5 : 0);
     camera.fov = damp(camera.fov, desiredFov, 2, dt);
     camera.updateProjectionMatrix();
     camera.position.lerp(_target, 1 - Math.exp(-(this.introActive ? 3.2 : 4.2) * dt));

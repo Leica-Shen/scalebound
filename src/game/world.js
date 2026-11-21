@@ -229,6 +229,15 @@ function buildBroadleafGeometry() {
   return mergeGeometries(pieces, false);
 }
 
+const CN = typeof window !== 'undefined' && !!window.__SCALEBOUND_CN__;
+
+const CN_FOLIAGE = [
+  { conifer: [0x365f59, 0x3f6c64, 0x4b7a6d, 0x2e504e, 0x597f73, 0x3a615b], broad: [0x8b8a58, 0x9d9464, 0xb0a06d, 0x74805b, 0xbe9e72], bush: [0x697a63, 0x7d886b, 0x8e9274, 0x6a705b], grass: [0x73806a, 0x879077, 0x969a80] },
+  { conifer: [0x345b55, 0x416b62, 0x4e776b, 0x2c4c4b, 0x5b7f73, 0x3c5f59], broad: [0x7d8058, 0x8e8a61, 0xa09269, 0xb0a06f, 0x687553], bush: [0x60705b, 0x748064, 0x85896c, 0x5a6652], grass: [0x68785f, 0x7c886b, 0x8e9477] },
+  { conifer: [0x385a51, 0x45675a, 0x537566, 0x2f4c47, 0x607f70, 0x426155], broad: [0xa38a55, 0xb4965c, 0x8f754b, 0x806a46, 0xc2a66a, 0x9b754d], bush: [0x7c6d4c, 0x897953, 0x97835b, 0x6e6248], grass: [0x7d8060, 0x8e8d6b, 0x9b9676] },
+  { conifer: [0x4d6661, 0x5a746c, 0x668077, 0x3e5754, 0x748b81, 0x566e68], broad: [0xa6a08b, 0xb2ab96, 0x938b77, 0x847d6b, 0xbdb6a0], bush: [0x898577, 0x969183, 0xa39e90, 0x777369], grass: [0x8d8e83, 0x9b9c91, 0xa8a89d] },
+];
+
 const SEASON_FOLIAGE = [
   {
     conifer: [0x315a42, 0x3a6b4b, 0x477b51, 0x3f7451, 0x56855b, 0x416f48],
@@ -258,7 +267,7 @@ const SEASON_FOLIAGE = [
 const SNOW_TINT = new THREE.Color(0xe8efea);
 
 function treeColor(tree, season, snowCover) {
-  const palette = SEASON_FOLIAGE[season] || SEASON_FOLIAGE[2];
+  const palette = (CN ? CN_FOLIAGE[season] : SEASON_FOLIAGE[season]) || (CN ? CN_FOLIAGE[2] : SEASON_FOLIAGE[2]);
   const list = tree.species === 0 ? palette.conifer : palette.broad;
   _color.setHex(list[Math.floor(tree.tint * list.length)]);
   _color.offsetHSL(0, 0.01 * (tree.tint - 0.5), (tree.tint - 0.5) * 0.05);
@@ -739,7 +748,7 @@ export class World {
         this.rockMesh.setColorAt(ri, _color);
         ri++;
       }
-      const foliage = SEASON_FOLIAGE[season] || SEASON_FOLIAGE[2];
+      const foliage = (CN ? CN_FOLIAGE[season] : SEASON_FOLIAGE[season]) || (CN ? CN_FOLIAGE[2] : SEASON_FOLIAGE[2]);
       for (const g of chunk.props.grass || []) {
         if (gi >= 7000) break;
         if (this._inStructureClearing(g.x, g.z, 0)) continue;

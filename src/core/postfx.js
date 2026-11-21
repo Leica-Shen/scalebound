@@ -21,6 +21,7 @@ const fragmentShader = /* glsl */`
   uniform float uUnderwater;
   uniform float uNight;
   uniform float uRain;
+  uniform float uChinese;
 
   vec3 toSRGB(vec3 c) {
     return pow(max(c, vec3(0.0)), vec3(0.454545));
@@ -67,16 +68,44 @@ const fragmentShader = /* glsl */`
     srgb = mix(vec3(luma2), srgb, 1.14);
     srgb = clamp((srgb - 0.5) * 1.08 + 0.515, 0.0, 1.0);
 
+    // C-edition ink wash: paper tint, soft mineral colour, and a restrained
+    // brush outline sampled from local luminance. It remains a painted pixel
+    // diorama rather than pretending to be a flat 2D illustration.
+    if (uChinese > 0.001) {
+      vec3 sL = toSRGB(texture2D(tDiffuse, uv - vec2(texel.x, 0.0)).rgb);
+      vec3 sR = toSRGB(texture2D(tDiffuse, uv + vec2(texel.x, 0.0)).rgb);
+      vec3 sU = toSRGB(texture2D(tDiffuse, uv - vec2(0.0, texel.y)).rgb);
+      vec3 sD = toSRGB(texture2D(tDiffuse, uv + vec2(0.0, texel.y)).rgb);
+      float lC = dot(srgb, vec3(0.299, 0.587, 0.114));
+      float lL = dot(sL, vec3(0.299, 0.587, 0.114));
+      float lR = dot(sR, vec3(0.299, 0.587, 0.114));
+      float lU = dot(sU, vec3(0.299, 0.587, 0.114));
+      float lD = dot(sD, vec3(0.299, 0.587, 0.114));
+      float edge = max(max(abs(lL - lR), abs(lU - lD)), abs(lC - (lL + lR + lU + lD) * 0.25));
+      vec3 paper = vec3(0.94, 0.91, 0.82);
+      vec3 ink = vec3(0.10, 0.12, 0.11);
+      vec3 wash = mix(vec3(lC), srgb, 0.84);
+      wash = mix(wash, wash * vec3(0.92, 1.06, 1.02), 0.55);
+      wash = mix(paper, wash, 0.42);
+      float inkShadow = smoothstep(0.42, 0.02, lC) * 0.24;
+      wash = mix(wash, vec3(0.16, 0.23, 0.23), inkShadow);
+      wash += vec3(0.045, 0.026, 0.004) * smoothstep(0.48, 0.9, lC);
+      wash = mix(wash, ink, smoothstep(0.028, 0.12, edge) * 0.76);
+      float fibre = fract(sin(dot(uv * vec2(313.7, 91.1), vec2(12.9898, 78.233))) * 43758.5453);
+      wash += (fibre - 0.5) * 0.014;
+      srgb = mix(srgb, wash, uChinese);
+    }
+
     // ordered 4×4 dither + palette stepping: the core of the pixel look
     float d = texture2D(tDither, gl_FragCoord.xy / 4.0).r - 0.5;
-    float levels = 38.0;
-    srgb = floor(srgb * levels + d * 0.9 + 0.5) / levels;
+    float levels = mix(38.0, 58.0, uChinese);
+    srgb = floor(srgb * levels + d * (0.9 - 0.55 * uChinese) + 0.5) / levels;
 
     // CRT / print vignette, with a faint warm glow at the horizon
     float vig = smoothstep(0.86, 0.2, radius);
     srgb *= mix(0.77, 1.0, vig);
     srgb *= 1.0 - uRain * 0.12;
-    float scan = 1.0 - 0.016 * (0.5 + 0.5 * sin(gl_FragCoord.y * 3.14159));
+    float scan = 1.0 - (0.016 - uChinese * 0.013) * (0.5 + 0.5 * sin(gl_FragCoord.y * 3.14159));
     srgb *= scan;
 
     // Roar / pickup flash
@@ -131,6 +160,7 @@ export class PixelPipeline {
         uUnderwater: { value: 0 },
         uNight: { value: 0 },
         uRain: { value: 0 },
+        uChinese: { value: window.__SCALEBOUND_CN__ ? 1 : 0 },
       },
       vertexShader,
       fragmentShader,

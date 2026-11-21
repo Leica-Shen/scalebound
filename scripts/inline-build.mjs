@@ -28,3 +28,11 @@ const beta = html
 const betaOut = path.join(root, 'scalebound-beta.html');
 fs.writeFileSync(betaOut, beta);
 console.log(`Beta preview → ${betaOut} (${(fs.statSync(betaOut).size / 1024 / 1024).toFixed(2)} MB)`);
+
+// China Edition: standard rules, eight native dragons, ink-wash presentation.
+const cn = html
+  .replace('<head>', '<head>\n  <script>window.__SCALEBOUND_CN__ = true;</script>')
+  .replace(/<title>[^<]*<\/title>/, '<title>鳞界 · 山河龙谱 C · SCALEBOUND</title>');
+const cnOut = path.join(root, 'scalebound-cn.html');
+fs.writeFileSync(cnOut, cn);
+console.log(`China edition → ${cnOut} (${(fs.statSync(cnOut).size / 1024 / 1024).toFixed(2)} MB)`);

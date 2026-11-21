@@ -1,10 +1,12 @@
-# 鳞界 2.1.1 · SCALEBOUND
+# 鳞界 2.2 · SCALEBOUND
 
 一款可直接在浏览器中游玩的 **像素风 3D 御龙游戏**。九条古龙、无限山海、真实时间、四季天气、可潜水与燃烧的战场。
 
 > **正式版**：**[scalebound.html](scalebound.html)**（约 2.3 MB，双击即可游玩）
 >
-> **Beta 前瞻版**：**[scalebound-beta.html](scalebound-beta.html)**（独立文件；自动飞行、非玩家龙 AI、空战系统均标 `BETA`，稳定版不会误触发）
+> **Beta 前瞻版**：**[scalebound-beta.html](scalebound-beta.html)**（独立文件；自动飞行、龙群 AI、九头海德拉/提亚马特、死亡动画与空战均标 `BETA`，稳定版不会误触发）
+>
+> **中国版 C**：**[scalebound-cn.html](scalebound-cn.html)**（标准规则特别衍生；八条中国龙、国画水墨渲染）
 >
 > GitHub：`https://github.com/Leica-Shen/scalebound`（私有仓库）
 
@@ -14,7 +16,7 @@
 npm install
 npm run dev        # 本地开发：http://127.0.0.1:5198/
 npm run build      # 生产构建到 dist/
-npm run standalone # 同时生成 scalebound.html 与 scalebound-beta.html
+npm run standalone # 生成标准版、Beta 前瞻版和中国版 C 三个文件
 ```
 
 浏览器需支持 WebGL2（Chrome / Edge / Safari 现代版本）。首次点击或按键后开启程序化音景。
@@ -28,7 +30,7 @@ npm run standalone # 同时生成 scalebound.html 与 scalebound-beta.html
 | 叁 | 应龙 | 东方・羽翼雨神 | 湖海浮息、雨中更快 | 游鱼、飞鸟 | 兴云布雨 |
 | 肆 | 八岐大蛇 | 东方・八首蛇神 | 浅水、林间、雨中 | 岩羊、飞鸟、游鱼 | 八岐瘴气 |
 | 伍 | 蛟龙 | 东方・江涛龙 | 海面 / 深水浮息 | 游鱼 | 翻江倒海 |
-| 陆 | 璃龙 | 东方・琉璃晶翼 | 夜空凝月、高空缓息 | 霜露（不可捕食） | 琉璃霜息 |
+| 陆 | 螭龙 | 东方・无角江龙 | 水面、雨中、浅水 | 游鱼、飞鸟 | 寒江螭影 |
 | 柒 | 威尔士红龙 | 西方・赤鳞巨龙 | 地面或火边歇息 | 岩羊、飞鸟 | 赤焰龙息 |
 | 捌 | 五色龙 | 东方・五行虹龙 | 全地形适应 | 游鱼、飞鸟、岩羊 | 五行轮转 |
 | 玖 | 巴比伦龙 | 蛇翼・青金石王龙 | 高空日光下恢复 | 岩羊、飞鸟 | 星陨天罚 |
@@ -83,18 +85,28 @@ npm run standalone # 同时生成 scalebound.html 与 scalebound-beta.html
 - 程序化鱼群/鸟群/羊群 AI、石塔生成、树木焚烧与地形编辑；Beta 另含非玩家龙 AI 与空战。
 - 单 HTML 内联构建（字体、样式、脚本、着色器全部内联）。
 
+## 中国版 C · 山河龙谱
+
+`scalebound-cn.html` 是标准版的特别衍生，不包含 Beta 实验系统：
+
+- **八龙图**：应龙、青龙、敖广、黄龙、睚眦、螭龙、虬龙、天龙；各自的角冠、须鬣、鳍翼、鳞色、龙赋与飞行参数独立配置。
+- **国画渲染**：暖纸色天空、矿物水墨调色、SOBEL 笔触边缘、纸纹与留白、宋体题签与朱砂印记；保留 3D 以维持原玩法与透视层次。
+- **中国式构图与配色**：较平的视场、长焦层次、雾中远山、青绿与赭石相间；龙体更长、更飘，须鬣与尾鳍强调书法运笔。
+- **独立文件**：中国版与标准版的存档设置与入口互不混用；同一套世界、生存与操控规则。
+
 ## Beta 前瞻版
 
 `scalebound-beta.html` 与正式版共用世界与九龙，但额外开放以下标有 `BETA` 的系统，正式版保持关闭：
 
 - **自动飞行**：按 `B` 开启。龙会自行巡游、寻找猎物进食、体力不足时寻找栖地休息，恢复后再次起飞；遭遇敌对龙时会自动接战。
-- **非玩家龙 AI**：世界中随机生成 4 条非玩家龙，具有巡逻、捕食、休整、追逐、逃离与互相冲突状态；不同龙种使用各自的低多边形剪影与配色。
-- **空战**：`X` 抓咬最近的敌对龙，`F` 龙赋会造成范围伤害；敌对龙会反击并显示 `BETA` 战斗面板。HUD、手册与自动飞行按钮均带 Beta 标识。
+- **非玩家龙 AI**：世界中随机生成 4 条非玩家龙，具有巡逻、捕食、休整、追逐、逃离与互相冲突状态；同一场景不会重复龙种，并会按概率出现九头海德拉与提亚马特。
+- **空战与死亡**：`X` 抓咬最近的敌对龙，`F` 龙赋会造成范围伤害；敌对龙会反击，死亡时旋转坠落并在烟尘中消散。HUD、手册与自动飞行按钮均带 Beta 标识。
+- **自动战斗**：自动模式在遭遇时会主动转向、抓咬并在安全距离释放龙赋。
 - **隔离承诺**：Beta 系统仅在独立文件中启用，正式版不加载对手龙、不启用自动飞行/空战；这些设计将在下一版本评估后再并入正式版。
 
 ## 验证
 
-已在 Chrome 中通过 `file://` 启动正式版与 Beta 前瞻版：无外部网络请求、控制台无错误；九龙切换（含八岐大蛇八首）、方向互调（G）、聚焦视野（TAB）、起飞/栖落、海面浮停、潜水/浮出、捕食、龙赋、树木点燃与焦化、自动飞行、非玩家龙生成与空中冲突均通过。正式版的 B/X 会拒绝进入 Beta 系统，Beta 文件才开放。
+已在 Chrome 中通过 `file://` 启动标准版、Beta 前瞻版和中国版 C：无外部网络请求、控制台无错误；九龙切换（含八岐大蛇八首与螭龙）、方向互调（G）、聚焦视野（TAB）、起飞/栖落、海面浮停、潜水/浮出、捕食、龙赋、树木点燃与焦化、自动飞行、非玩家龙生成/去重/死亡动画、九头海德拉生成与空中冲突、中国版八龙与水墨渲染均通过。正式版不会启用 Beta 系统。
 
 ## 截图
 
@@ -104,6 +116,9 @@ npm run standalone # 同时生成 scalebound.html 与 scalebound-beta.html
 - [御龙飞行](screenshots/final-flight.png)
 - [Beta 对战](screenshots/final-beta.png)
 - [燃烧森林](screenshots/final-treefire.png)
+- [中国版 C](screenshots/final-cn-menu.png)
+- [中国版飞行](screenshots/final-cn-flight.png)
+- [中国版八龙图](screenshots/final-cn-dragons.png)
 - [水下](screenshots/final-underwater.png)
 - [雪季](screenshots/final-winter.png)
 - [石塔遗迹](screenshots/final-structure.png)

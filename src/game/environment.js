@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+
+const CN = typeof window !== 'undefined' && !!window.__SCALEBOUND_CN__;
 import { SEA_LEVEL, heightAt, moistureAt } from '../core/terrain.js';
 import { clamp, lerp, damp } from '../core/noise.js';
 
@@ -271,6 +273,13 @@ export class Environment {
     l.rim.color.copy(this.colors.sun);
     l.rim.intensity = dayFactor * 0.35 + this.night * 0.1;
     l.hero.intensity = 0.72 + (1 - dayFactor) * 0.18;
+    if (CN) {
+      l.sun.intensity *= 0.68;
+      l.hemi.intensity = 1.15;
+      l.ambient.intensity = 0.64;
+      l.fill.intensity = 0.55;
+      l.rim.intensity *= 0.55;
+    }
     if (this.underwater) {
       // Clear, readable lagoon light: enough ambient to read scales and seabed
       // silhouettes, with a cool fill that keeps depth without going pitch dark.
@@ -284,13 +293,22 @@ export class Environment {
       l.rim.intensity = 0.28;
     }
     if (this.world.renderer) {
-      const exposure = this.underwater ? 1.36 : (1.34 + this.night * 0.16 + this.rain * 0.04);
+      const exposure = this.underwater ? 1.36 : (CN ? 1.24 : (1.34 + this.night * 0.16 + this.rain * 0.04));
       this.world.renderer.toneMappingExposure = exposure;
     }
   }
 
   _applyWorld() {
     const w = this.world;
+    if (CN) {
+      // The C edition reads as a hanging scroll: warm paper light, mineral
+      // ink-wash colour and long atmospheric layers rather than crisp noon.
+      this.colors.zenith.set('#b9c7c5');
+      this.colors.horizon.set('#efe5cf');
+      this.colors.haze.set('#d9cfb9');
+      this.colors.sun.set('#d9bd89');
+      this.cloudiness = Math.max(this.cloudiness, 0.18);
+    }
     const fog = this.scene.fog;
     const wet = this.rain * 0.4 + this.snow * 0.17 + this.fogAmount * 0.9;
     if (this.underwater) {
@@ -312,6 +330,11 @@ export class Environment {
       if (this.fogAmount > 0.2) haze.lerp(new THREE.Color('#d4d6c9').multiplyScalar(1 - this.night * 0.8), this.fogAmount * 0.35);
       if (this.rain > 0.1) haze.multiplyScalar(1 - this.rain * 0.18);
       w.fogColorTarget = haze;
+    }
+    if (CN && !this.underwater) {
+      w.fogNearTarget = 280;
+      w.fogFarTarget = 1180;
+      w.fogColorTarget = new THREE.Color('#ded4bf');
     }
     w.sky.applyEnvironment(this);
     w.sky.materials?.clouds?.forEach?.((m) => {

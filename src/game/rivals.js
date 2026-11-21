@@ -25,8 +25,19 @@ function wingGeometry() {
 }
 const WING_GEO = wingGeometry();
 
-function buildRival(dragon) {
-  const p = dragon.palette;
+export const SPECIAL_ENEMIES = [
+  {
+    id: 'hydra', name: '九头海德拉', title: '九首潮毒', heads: 9, scale: 1.28, hp: 1.55,
+    palette: { base:'#3d5d47', dark:'#182b25', light:'#7e9c69', belly:'#b7a46c', accent:'#b8ef6b', accent2:'#84d9c4', horn:'#d8c69a', membrane:'#486b55', membraneLight:'#9ad889', eye:'#ff7049', glow:'#b8ff73', metal:'#c7a75e' },
+  },
+  {
+    id: 'tiamat', name: '提亚马特', title: '原初五首', heads: 5, scale: 1.34, hp: 1.7,
+    palette: { base:'#542d46', dark:'#24152b', light:'#a56c8e', belly:'#d0a45f', accent:'#f1c45c', accent2:'#5bd6d6', horn:'#e5d0a5', membrane:'#7c3748', membraneLight:'#d76b78', eye:'#ffe276', glow:'#ffb35a', metal:'#d4ad62' },
+  },
+];
+
+function buildRival(dragon, variant = null) {
+  const p = variant?.palette || dragon.palette;
   const group = new THREE.Group();
   const material = mat(p.base);
   const dark = mat(p.dark);
@@ -76,8 +87,46 @@ function buildRival(dragon) {
     const fin = add(new THREE.ConeGeometry(0.14, 0.6, 4), accent, 0, 0.56, -1.1+i*0.55, group);
     fin.rotation.x = -0.15; fin.rotation.z = 0.05;
   }
-  group.scale.setScalar(0.85 + Math.random()*0.35);
-  return { group, wings, neck, head, tail, materials:[material,dark,light,belly,accent,membrane,eyeMat] };
+  // Extra heads for Hydra/Tiamat variants. Each gets its own short serpentine
+  // neck so the silhouette reads as a hydra, not a cluster of props.
+  const extraHeads = [];
+  const extraCount = Math.max(0, (variant?.heads || 1) - 1);
+  for (let hi = 0; hi < extraCount; hi++) {
+    const side = hi % 2 ? 1 : -1;
+    const row = Math.floor(hi / 2);
+    const anchor = new THREE.Group();
+    anchor.position.set(side * (0.28 + row * 0.15), 0.42 + row * 0.04, 1.3 - row * 0.10);
+    anchor.rotation.y = side * (0.36 + row * 0.18);
+    anchor.rotation.z = -side * 0.08;
+    group.add(anchor);
+    let nparent = anchor;
+    for (let k = 0; k < 3; k++) {
+      const g = new THREE.Group(); if (k > 0) g.position.z = 0.43;
+      g.rotation.x = -0.16 + k * 0.02; nparent.add(g); nparent = g;
+      const seg = add(B, material, 0, 0, 0.21, g); seg.scale.set(0.28, 0.28, 0.55);
+      add(B, belly, 0, -0.1, 0.2, g).scale.set(0.18, 0.07, 0.45);
+    }
+    const eh = new THREE.Group(); eh.position.z = 0.42; nparent.add(eh);
+    add(B, material, 0, 0.04, 0.2, eh).scale.set(0.52, 0.44, 0.8);
+    add(B, accent, 0, 0.2, 0.38, eh).scale.set(0.32, 0.18, 0.42);
+    add(B, eyeMat, -0.18, 0.14, 0.48, eh).scale.set(0.1, 0.08, 0.06);
+    add(B, eyeMat, 0.18, 0.14, 0.48, eh).scale.set(0.1, 0.08, 0.06);
+    add(new THREE.ConeGeometry(0.08, 0.46, 4), dark, -0.16, 0.36, 0.12, eh).rotation.z = -0.25;
+    add(new THREE.ConeGeometry(0.08, 0.56, 4), dark, 0.16, 0.36, 0.12, eh).rotation.z = 0.25;
+    extraHeads.push({ anchor, neck: eh, base: -0.16, side, row, phase: hi * 1.37 });
+  }
+  // Neck / flank fins and a taller tail spike give the variants more texture.
+  for (let i = 0; i < 5; i++) {
+    const fin = add(new THREE.ConeGeometry(0.11, 0.42, 4), accent, 0, 0.56, 0.7 - i*0.42, group);
+    fin.rotation.x = -0.2;
+  }
+  for (const s of [-1,1]) {
+    add(B, accent, s*0.56, 0.32, 0.3).scale.set(0.08, 0.2, 1.5);
+    add(new THREE.ConeGeometry(0.12, 0.8, 4), p ? dark : dark, s*0.38, 0.48, 1.1).rotation.z = s*-0.4;
+  }
+  add(new THREE.ConeGeometry(0.32, 1.1, 4), accent, 0, 0.18, -2.5, tail).rotation.x = Math.PI*0.5;
+  group.scale.setScalar((0.85 + Math.random()*0.35) * (variant?.scale || 1));
+  return { group, wings, neck, head, tail, extraHeads, materials:[material,dark,light,belly,accent,membrane,eyeMat] };
 }
 
 export class RivalDragons {
@@ -114,25 +163,40 @@ export class RivalDragons {
   }
 
   _spawn(playerPos) {
-    const dragon = this.catalog[Math.floor(Math.random()*this.catalog.length)];
+    // No two active rivals share a species: a Hydra should feel like an event,
+    // not like a row of copies. Special bosses consume the same unique slot.
+    const active = new Set(this.list.filter(n => n.alive || n.dying).map(n => n.name));
+    const pool = this.catalog.filter(d => !active.has(d.name));
+    let dragon = null;
+    let variant = null;
+    const roll = Math.random();
+    if (roll < 0.20) {
+      const specials = SPECIAL_ENEMIES.filter(v => !active.has(v.name));
+      if (specials.length) variant = specials[Math.floor(Math.random()*specials.length)];
+    }
+    if (!variant && pool.length) dragon = pool[Math.floor(Math.random()*pool.length)];
+    if (!dragon && !variant) return null;
     const a = Math.random()*Math.PI*2;
     const r = 150 + Math.random()*230;
     const x = playerPos.x + Math.cos(a)*r;
     const z = playerPos.z + Math.sin(a)*r;
     const ground = heightAt(x,z);
     const y = Math.max(SEA_LEVEL+18, ground+28+Math.random()*54);
-    const root = buildRival(dragon);
+    const root = buildRival(dragon || this.catalog[0], variant);
     const scale = root.group.scale.x;
     root.group.position.set(x,y,z);
     root.group.rotation.y = Math.random()*6.28;
     this.group.add(root.group);
+    const baseHp = 64 + ((dragon?.stats?.endurance) || 80)*0.35;
+    const name = variant?.name || dragon.name;
     const npc = {
-      root, dragon, name: dragon.name, scale,
+      root, dragon: dragon || this.catalog[0], variant, name, scale,
       pos: new THREE.Vector3(x,y,z), vel: new THREE.Vector3(),
-      yaw: root.group.rotation.y, hp: 64 + (dragon.stats?.endurance||80)*0.35,
+      yaw: root.group.rotation.y, hp: baseHp * (variant?.hp || 1),
       maxHp: 0, state: 'patrol', waypoint: new THREE.Vector3(x+(Math.random()-0.5)*180,y+20,z+(Math.random()-0.5)*180),
-      attackCd: 2 + Math.random()*3, aggression: 0.28 + Math.random()*0.55, alive: true, respawn: 0, flap: Math.random()*6.28,
+      attackCd: 2 + Math.random()*3, aggression: variant ? 0.85 : 0.28 + Math.random()*0.55, alive: true, respawn: 0, flap: Math.random()*6.28,
       energy: 0.55 + Math.random()*0.4, hunger: 0.25 + Math.random()*0.45, stateTimer: 0,
+      hitFlash: 0, dying: false, deathAge: 0,
     };
     npc.maxHp = npc.hp;
     this.list.push(npc);
@@ -149,6 +213,23 @@ export class RivalDragons {
     const water = environment?.underwater;
     for (let i=this.list.length-1;i>=0;i--) {
       const n = this.list[i];
+      if (n.dying) {
+        n.deathAge += dt;
+        const t = clamp(n.deathAge / 1.7, 0, 1);
+        n.root.group.rotation.z += dt * (2.6 + (n.variant ? 1.2 : 0));
+        n.root.group.rotation.x += dt * 0.55;
+        n.pos.y -= dt * (5 + t * 15);
+        n.root.group.position.copy(n.pos);
+        if (Math.random() < dt * 12) this.game.world.effects.emit(n.pos.x, n.pos.y + 1, n.pos.z,
+          (Math.random()-0.5)*2, -1 - Math.random()*2, (Math.random()-0.5)*2,
+          Math.random()<.4 ? '#ffcf77' : '#5b615b', 0.3+Math.random()*0.4, 1.2+Math.random(), 0.2, 0.9);
+        if (n.deathAge > 1.55) n.root.group.visible = false;
+        if (n.deathAge > 2.2) {
+          n.respawn -= dt;
+          if (n.respawn <= 0) { this._remove(n); this._spawn(playerPos); }
+        }
+        continue;
+      }
       if (!n.alive) { n.respawn -= dt; if (n.respawn <= 0) { this._remove(n); this._spawn(playerPos); } continue; }
       const toPlayer = _v.copy(playerPos).sub(n.pos);
       const dist = toPlayer.length();
@@ -219,6 +300,14 @@ export class RivalDragons {
       for (const w of n.root.wings) w.pivot.rotation.z = w.side * (0.16 + beat*0.3);
       n.root.head.rotation.y = Math.sin(n.flap*0.5)*0.06;
       n.root.tail.rotation.y = Math.sin(n.flap*0.45)*0.12;
+      for (const eh of n.root.extraHeads) {
+        eh.neck.rotation.y = Math.sin(n.flap*0.55 + eh.phase) * 0.12 * eh.side;
+        eh.neck.rotation.x = -0.04 + Math.sin(n.flap*0.7 + eh.phase) * 0.05;
+      }
+      if (n.hitFlash > 0) {
+        n.hitFlash -= dt;
+        for (const m of n.root.materials) if (m.emissive) m.emissive.setHex(n.hitFlash > 0 ? 0x4c1616 : 0x000000);
+      }
       if (n.state === 'chase' && dist < 38 && n.attackCd <= 0) {
         n.attackCd = 3.6 + Math.random()*2.4;
         this.game.takeRivalHit(7 + Math.round(Math.random()*7), n);
@@ -250,12 +339,13 @@ export class RivalDragons {
     return best;
   }
 
-  playerAttack(playerPos, forward) {
+  playerAttack(playerPos, forward, damage = 20) {
     const n = this.nearest(playerPos, 58);
     if (!n) return null;
     const dot = _v.copy(n.pos).sub(playerPos).normalize().dot(forward);
     if (dot < 0.15) return null;
-    n.hp -= 20 + Math.random()*6;
+    n.hp -= damage + Math.random()*6;
+    n.hitFlash = 0.16;
     n.aggression = 1;
     n.state = 'chase';
     this.target = n;
@@ -276,12 +366,14 @@ export class RivalDragons {
   }
 
   _kill(n, by=null) {
-    if (!n.alive) return;
-    n.alive = false; n.hp = 0; n.respawn = 7 + Math.random()*5;
-    n.root.group.visible = false;
+    if (!n.alive && n.dying) return;
+    n.alive = false; n.dying = true; n.deathAge = 0; n.hp = 0; n.respawn = 6 + Math.random()*5;
+    n.root.group.visible = true;
     if (this.target === n) this.target = null;
-    this.game.world.effects.burst(n.pos, n.dragon.palette.glow, 36, 12, 0.35, 1.4);
-    this.game.audio?.groundHit?.(0.5);
+    this.game.world.effects.burst(n.pos, n.variant?.palette?.accent || n.dragon.palette.glow, 48, 16, 0.4, 1.6);
+    this.game.audio?.groundHit?.(0.55);
+    this.game.ui?.flash?.(0.08, 220);
+    this.game.shake = Math.max(this.game.shake || 0, 0.42);
   }
 
   _remove(n) {

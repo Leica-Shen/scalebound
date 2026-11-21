@@ -36,6 +36,7 @@ export class UI {
       hudFocusBtn: $('hudFocusBtn'),
       hudAutoBtn: $('hudAutoBtn'),
       betaFlag: $('betaFlag'),
+      cnFlag: $('cnFlag'),
       combatPanel: $('combatPanel'),
       combatTargetName: $('combatTargetName'),
       combatPlayerBar: $('combatPlayerBar'),
@@ -153,6 +154,23 @@ export class UI {
     this.miniImage = this.miniBufferCtx.createImageData(56, 56);
     this.el.seedLabel.textContent = '20261121';
     this.el.mapWeather.textContent = '晴 · 18°';
+  }
+
+  setChina(on) {
+    document.documentElement.classList.toggle('is-cn', !!on);
+    if (this.el.cnFlag) this.el.cnFlag.classList.toggle('is-hidden', !on);
+    if (!on) return;
+    const eyebrow = document.querySelector('.eyebrow');
+    if (eyebrow) eyebrow.innerHTML = '<span class="eyebrow-dot"></span>山河龙谱<i></i>EIGHT DRAGON SCROLL';
+    const tagline = document.querySelector('.tagline');
+    if (tagline) tagline.textContent = '一卷山河，八龙入画。以水墨为骨，以龙吟为声。';
+    const ribbon = document.querySelector('.menu-ribbon span');
+    if (ribbon) ribbon.textContent = '山河入卷 · 八龙行天';
+    const kicker = document.querySelector('.loader-kicker');
+    if (kicker) kicker.textContent = 'THE EIGHT DRAGON SCROLL';
+    const center = document.querySelector('.menu-footer .footer-center');
+    if (center) center.textContent = '山 河 无 尽 · 笔 墨 有 灵';
+    document.title = '鳞界 · 山河龙谱 C · SCALEBOUND';
   }
 
   setBeta(on) {
@@ -358,7 +376,7 @@ export class UI {
     const restLabel = rest === 'water' ? '水面' : (rest === 'sky' ? '高空' : (rest === 'forest' ? '林间' : (rest === 'any' ? '全地形' : '地面')));
     const dietNames = { fish: '游鱼', birds: '飞鸟', sheep: '岩羊' };
     let dietLabel = (dragon.survival?.diet || []).map((d) => dietNames[d]).join(' · ');
-    if (!dietLabel) dietLabel = dragon.id === 'lilong' ? '月华 · 霜露' : '云露 · 日光';
+    if (!dietLabel) dietLabel = '云露 · 日光';
     this.el.selArchetype.textContent = archLabel;
     this.el.selRest.textContent = restLabel;
     this.el.selDiet.textContent = dietLabel;

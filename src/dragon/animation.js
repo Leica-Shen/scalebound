@@ -37,6 +37,10 @@ export class DragonAnimator {
     this.mode = 'showcase';
     this._lastFlapCross = 0;
     this.bodyLift = 0;
+    this.bodyLagYaw = 0;
+    this.bodyLagPitch = 0;
+    this.bodyRoll = 0;
+    this.neckLag = 0;
     this.onFlapDown = null;
     this._first = true;
   }
@@ -133,6 +137,10 @@ export class DragonAnimator {
     this.smooth.water = damp(this.smooth.water, waterIn, 4.0, dt);
 
     const ss = this.smooth;
+    this.bodyLagYaw = damp(this.bodyLagYaw, -ss.turn * 0.075, 2.1, dt);
+    this.bodyLagPitch = damp(this.bodyLagPitch, ss.pitch * 0.025, 2.4, dt);
+    this.bodyRoll = damp(this.bodyRoll, -ss.turn * 0.045, 2.2, dt);
+    this.neckLag = damp(this.neckLag, -ss.turn * 0.03, 1.6, dt);
 
     // ── wing beat clock ─────────────────────────────────────────────────────
     if (this.roarActive) {
@@ -254,7 +262,9 @@ export class DragonAnimator {
     rig.inner.rotation.z = -ss.turn * 0.028 + Math.sin(this.wingPhase) * 0.015 * energy;
     rig.inner.rotation.x = -ss.pitch * 0.012 + Math.sin(t * 0.8) * 0.006;
     const easternWave = rig.archetype === 'eastern' ? Math.sin(t * 1.05) * 0.022 + Math.sin(this.wingPhase * 0.5) * 0.012 : 0;
-    rig.inner.rotation.y = -ss.turn * 0.055 + easternWave;
+    rig.inner.rotation.y = -ss.turn * 0.055 + easternWave + this.bodyLagYaw;
+    rig.inner.rotation.x += this.bodyLagPitch;
+    rig.inner.rotation.z += this.bodyRoll;
     if (rig.bodyGroup) {
       rig.bodyGroup.scale.set(1 + breath * 0.012, 1 + Math.abs(breath) * 0.008, 1 + breath * 0.006);
     }
@@ -273,7 +283,7 @@ export class DragonAnimator {
       const tFrac = nCount <= 1 ? 0 : i / (nCount - 1);
       const breathSway = Math.sin(t * 1.1 + i * 0.42) * 0.006;
       seg.rotation.x = rig.neckBaseX[i] - roar * 0.05 * (0.35 + tFrac) - headCounter * 0.12 * (1 - tFrac * 0.5) + breathSway + breathRecoil * 0.12 * (0.3 + tFrac * 0.7) - breathRelease * 0.09 * tFrac;
-      seg.rotation.y = (lookSway * 0.22 + ss.lookYaw * 0.22) * (0.25 + tFrac * 0.6) + Math.sin(t * 0.7 + i * 0.3) * 0.006 + (rig.archetype === 'eastern' ? Math.sin(t * 0.9 - i * 0.25) * 0.018 : 0);
+      seg.rotation.y = (lookSway * 0.22 + ss.lookYaw * 0.22) * (0.25 + tFrac * 0.6) + Math.sin(t * 0.7 + i * 0.3) * 0.006 + (rig.archetype === 'eastern' ? Math.sin(t * 0.9 - i * 0.25) * 0.018 : 0) + this.neckLag * (0.2 + tFrac * 0.5);
       seg.rotation.z = -ss.roll * 0.022 * (0.4 + tFrac);
     }
     if (rig.head) {
@@ -372,14 +382,14 @@ export class DragonAnimator {
     }
 
     // ── tail: a travelling wave, slower and broader on turns ───────────────
-    const tailAmp = (rig.archetype === 'eastern' ? 0.08 : 0.055) + (1 - Math.min(1, ss.speed)) * 0.055 + ss.stall * 0.06 + showcase * 0.025;
+    const tailAmp = (rig.archetype === 'eastern' ? 0.105 : 0.07) + (1 - Math.min(1, ss.speed)) * 0.06 + ss.stall * 0.07 + showcase * 0.03;
     const tailClock = t * (2.4 + ss.speed * 2.2);
     for (let i = 0; i < rig.tail.length; i++) {
       const seg = rig.tail[i];
       const frac = i / Math.max(1, rig.tail.length - 1);
       const lateral =
         Math.sin(tailClock - i * 0.58) * tailAmp * (0.25 + frac * 0.95) +
-        ss.turn * (0.055 + frac * 0.06) +
+        ss.turn * (0.075 + frac * 0.08) +
         sinSafe(i * 0.5 + t * 0.6) * 0.008;
       seg.rotation.y = lateral;
       seg.rotation.x = rig.tailBaseX[i] - ss.climb * 0.022 * frac + Math.sin(tailClock * 0.5 - i * 0.3) * 0.012;

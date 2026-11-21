@@ -6,9 +6,12 @@ import { UI } from './game/ui.js';
 import { AudioEngine } from './core/audio.js';
 import { Game } from './game/game.js';
 import { DRAGONS } from './dragon/catalog.js';
+import { CHINA_DRAGONS } from './dragon/china-catalog.js';
 import { WORLD_SEED } from './core/terrain.js';
 
 const BETA = !!window.__SCALEBOUND_BETA__;
+const CN = !!window.__SCALEBOUND_CN__;
+const catalog = CN ? CHINA_DRAGONS : DRAGONS;
 const canvas = document.getElementById('scene');
 const app = document.getElementById('app');
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -41,7 +44,7 @@ const camera = new THREE.PerspectiveCamera(48, window.innerWidth / window.innerH
 camera.position.set(0, 100, 200);
 
 const pipeline = new PixelPipeline(renderer);
-const ui = new UI(DRAGONS);
+const ui = new UI(catalog);
 const audio = new AudioEngine();
 const world = new World(scene);
 world.renderer = renderer;
@@ -63,19 +66,25 @@ const game = new Game({
   world,
   ui,
   audio,
-  catalog: DRAGONS,
+  catalog,
   renderer,
   beta: BETA,
+  china: CN,
 });
 ui.setSoundEnabled(game.soundEnabled);
 ui.setBeta(BETA);
+ui.setChina(CN);
 if (BETA) {
   document.documentElement.classList.add('is-beta');
   document.title = '鳞界 2.1 Beta · SCALEBOUND';
 }
+if (CN) {
+  document.documentElement.classList.add('is-cn');
+  document.title = '鳞界 · 山河龙谱 C · SCALEBOUND';
+}
 
 window.__SCALEBOUND__ = {
-  game, world, ui, audio, scene, camera, renderer, pipeline, beta: BETA,
+  game, world, ui, audio, scene, camera, renderer, pipeline, beta: BETA, china: CN,
   ready: false,
   THREE,
   finishIntro: () => game.finishIntro(),
