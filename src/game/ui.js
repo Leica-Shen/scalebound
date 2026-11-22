@@ -37,6 +37,7 @@ export class UI {
       hudAutoBtn: $('hudAutoBtn'),
       betaFlag: $('betaFlag'),
       cnFlag: $('cnFlag'),
+      cnOrnament: $('cnOrnament'),
       combatPanel: $('combatPanel'),
       combatTargetName: $('combatTargetName'),
       combatPlayerBar: $('combatPlayerBar'),
@@ -159,6 +160,7 @@ export class UI {
   setChina(on) {
     document.documentElement.classList.toggle('is-cn', !!on);
     if (this.el.cnFlag) this.el.cnFlag.classList.toggle('is-hidden', !on);
+    if (this.el.cnOrnament) this.el.cnOrnament.classList.toggle('is-hidden', !on);
     if (!on) return;
     const eyebrow = document.querySelector('.eyebrow');
     if (eyebrow) eyebrow.innerHTML = '<span class="eyebrow-dot"></span>山河龙谱<i></i>EIGHT DRAGON SCROLL';
@@ -170,11 +172,16 @@ export class UI {
     if (kicker) kicker.textContent = 'THE EIGHT DRAGON SCROLL';
     const center = document.querySelector('.menu-footer .footer-center');
     if (center) center.textContent = '山 河 无 尽 · 笔 墨 有 灵';
-    document.title = '鳞界 · 山河龙谱 C · SCALEBOUND';
+    const start = document.querySelector('#startBtn .start-label');
+    if (start) start.innerHTML = '<small>ENTER THE SCROLL</small>启 程';
+    const random = document.getElementById('randomBtn');
+    if (random) random.innerHTML = '<span>随 缘</span>';
+    document.title = '鳞界 · 山河龙谱 C4 · SCALEBOUND';
   }
 
   setBeta(on) {
     document.documentElement.classList.toggle('is-beta', !!on);
+    document.documentElement.classList.toggle('is-f', !!on);
     [this.el.betaFlag, ...document.querySelectorAll('.beta-only')].forEach((el) => el?.classList.toggle('is-hidden', !on));
     if (!on) this.el.combatPanel?.classList.add('is-hidden');
   }

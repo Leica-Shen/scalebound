@@ -9,7 +9,8 @@ import { DRAGONS } from './dragon/catalog.js';
 import { CHINA_DRAGONS } from './dragon/china-catalog.js';
 import { WORLD_SEED } from './core/terrain.js';
 
-const BETA = !!window.__SCALEBOUND_BETA__;
+const F = !!window.__SCALEBOUND_F__ || !!window.__SCALEBOUND_BETA__;
+const BETA = F;
 const CN = !!window.__SCALEBOUND_CN__;
 const catalog = CN ? CHINA_DRAGONS : DRAGONS;
 const canvas = document.getElementById('scene');
@@ -69,22 +70,23 @@ const game = new Game({
   catalog,
   renderer,
   beta: BETA,
+  f: F,
   china: CN,
 });
 ui.setSoundEnabled(game.soundEnabled);
 ui.setBeta(BETA);
 ui.setChina(CN);
 if (BETA) {
-  document.documentElement.classList.add('is-beta');
-  document.title = '鳞界 2.1 Beta · SCALEBOUND';
+  document.documentElement.classList.add('is-beta', 'is-f');
+  document.title = '鳞界 2.5 F · SCALEBOUND';
 }
 if (CN) {
   document.documentElement.classList.add('is-cn');
-  document.title = '鳞界 · 山河龙谱 C · SCALEBOUND';
+  document.title = '鳞界 · 山河龙谱 C4 · SCALEBOUND';
 }
 
 window.__SCALEBOUND__ = {
-  game, world, ui, audio, scene, camera, renderer, pipeline, beta: BETA, china: CN,
+  game, world, ui, audio, scene, camera, renderer, pipeline, beta: BETA, f: F, china: CN,
   ready: false,
   THREE,
   finishIntro: () => game.finishIntro(),

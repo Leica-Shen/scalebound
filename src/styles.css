@@ -2754,3 +2754,123 @@ kbd { font-size: 8px; min-width: 18px; height: 17px; }
 .is-cn .menu-copy .ghost-btn { color: #493725 !important; border-color: rgba(104,78,45,.48) !important; }
 .is-cn .menu-copy .ghost-btn * { color: #493725 !important; }
 .is-cn .menu-copy .stat-bar i, .is-cn .menu-copy .stat-meter i { background: #7b5a36 !important; }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   C4 · 山河画卷：不再是深色 HUD 换皮，而是纸、墨、朱砂三色的完整界面
+   ═══════════════════════════════════════════════════════════════════════ */
+.cn-ornament {
+  position: fixed; z-index: 33; left: 18px; top: 112px;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  color: #403323; pointer-events: none;
+}
+.cn-ornament-seal {
+  width: 25px; height: 25px; display: grid; place-items: center;
+  background: #9b3b2a; color: #f4e7c9; border: 1px solid #6f281e;
+  font-family: "MaShanZheng", "Kaiti SC", serif; font-size: 15px;
+}
+.cn-ornament-text { writing-mode: vertical-rl; font-family: "MaShanZheng", "Kaiti SC", serif; font-size: 15px; letter-spacing: .28em; }
+.cn-ornament-rule { width: 1px; height: 72px; background: linear-gradient(#9b3b2a, rgba(155,59,42,.08)); }
+.cn-ornament-sub { writing-mode: vertical-rl; font-family: "Kaiti SC", serif; font-size: 8px; letter-spacing: .26em; color: #746146; }
+.is-cn .cn-ornament { display: flex; }
+.is-cn .menu { background: linear-gradient(180deg, rgba(238,231,213,.12), rgba(238,231,213,.06)); }
+.is-cn .menu::before { display: none; }
+.is-cn .menu-top {
+  margin: 12px 18px 0; padding: 0 18px; height: 62px;
+  background: rgba(239,232,213,.91); border: 1px solid rgba(104,78,45,.30);
+  box-shadow: 0 8px 26px rgba(54,42,27,.12);
+}
+.is-cn .mini-brand-copy span, .is-cn .mini-brand-copy small,
+.is-cn .menu-ribbon, .is-cn .menu-ribbon i { color: #4a3b29 !important; }
+.is-cn .menu-ribbon i { background: rgba(104,78,45,.35); }
+.is-cn .menu-tools .icon-btn { background: transparent; border-color: rgba(104,78,45,.30); color: #4a3b29; }
+.is-cn .menu-tools .icon-btn svg { color: #4a3b29; }
+.is-cn .menu-copy {
+  margin-left: 64px; width: min(510px, 43vw); padding: 24px 26px 20px;
+  background: linear-gradient(180deg, rgba(243,236,219,.97), rgba(232,222,201,.94));
+  border: 1px solid rgba(104,78,45,.46);
+  box-shadow: 0 24px 70px rgba(40,30,19,.20);
+}
+.is-cn .menu-copy::before {
+  content: ''; position: absolute; left: 9px; top: 14px; bottom: 14px; width: 2px;
+  background: linear-gradient(#9b3b2a, rgba(155,59,42,.12) 55%, transparent);
+}
+.is-cn .menu-copy::after { content: '龙'; right: 14px; bottom: 16px; }
+.is-cn .wordmark h1 { font-size: clamp(54px, 6.4vw, 92px); line-height: .9; color: #211c15 !important; }
+.is-cn .wordmark h1 span { display: inline-block; }
+.is-cn .wordmark-sub, .is-cn .wordmark-side { color: #826b4d !important; }
+.is-cn .menu-aside { display: none; }
+.is-cn .sel-name { font-size: clamp(32px, 3.3vw, 48px); }
+.is-cn .start-btn { border: 1px solid #8d2f23 !important; background: #963b2a !important; color: #f6e8ca !important; }
+.is-cn .start-btn * { color: #f6e8ca !important; }
+.is-cn .start-btn-bg { display: none; }
+.is-cn .ghost-btn { border-color: rgba(104,78,45,.42) !important; }
+.is-cn .carousel {
+  margin: 0 18px; padding: 10px 12px 9px;
+  background: linear-gradient(180deg, rgba(243,236,219,.96), rgba(232,222,201,.98));
+  border: 1px solid rgba(104,78,45,.34);
+  border-bottom: 0;
+}
+.is-cn .carousel::before { display: none; }
+.is-cn .carousel-arrow { color: #6c563d; }
+.is-cn .dragon-list { gap: 0; }
+.is-cn .dragon-chip {
+  background: transparent; border: 0; border-right: 1px solid rgba(104,78,45,.22);
+  min-height: 44px; padding: 6px 10px;
+}
+.is-cn .dragon-chip b { color: #4b3a27; }
+.is-cn .dragon-chip small { color: #8b7657; }
+.is-cn .dragon-chip .chip-index { color: #9b3b2a; }
+.is-cn .dragon-chip.is-selected { background: rgba(155,59,42,.10); border-right-color: #9b3b2a; }
+.is-cn .dragon-chip.is-selected::before { display: none; }
+.is-cn .dragon-chip.is-selected b { color: #8d2f23; }
+.is-cn .menu-footer {
+  margin: 0 18px 12px; flex-basis: 27px;
+  background: rgba(232,222,201,.97); border: 1px solid rgba(104,78,45,.28); border-top: 0;
+  color: #6d5a40; padding: 0 12px;
+}
+.is-cn .menu-footer b, .is-cn .menu-footer .footer-center { color: #6d5a40 !important; }
+.is-cn .hud-right { gap: 7px; }
+.is-cn .hud-right .minimap-shell, .is-cn .hud-right .vitals-panel,
+.is-cn .hud-right-bottom .run-stat, .is-cn .ability-slot {
+  border-radius: 0; box-shadow: none;
+}
+.is-cn .hud-right .minimap-shell { border: 1px solid rgba(104,78,45,.45); }
+.is-cn .hud-right > .vitals-panel { border-top: 0 !important; }
+.is-cn .hud-identity { background: rgba(239,232,213,.94); border: 1px solid rgba(104,78,45,.38); box-shadow: none; }
+.is-cn .hud-tools .hud-icon { box-shadow: 0 4px 12px rgba(50,38,24,.10); }
+.is-cn .hud-tools .hud-icon.is-active { background: #963b2a; color: #f4e7c9; }
+.is-cn .hud-tools .hud-icon.is-active svg { color: #f4e7c9; }
+.is-cn .compass { border-radius: 0; box-shadow: none; }
+.is-cn .control-ribbon { background: rgba(239,232,213,.88); border-radius: 0; }
+.is-cn .flight-bar .bar-fill, .is-cn .stamina-fill,
+.is-cn .vital-bar i, .is-cn .run-bar i { background: #8d2f23 !important; }
+.is-cn .ability-slot { border-left: 4px solid #9b3b2a !important; }
+.is-cn .action-prompt { border-left: 3px solid #9b3b2a !important; }
+@media (max-width: 900px) {
+  .is-cn .cn-ornament { display: none !important; }
+  .is-cn .menu-copy { margin-left: 16px; width: calc(100vw - 32px); padding: 16px; }
+}
+
+/* C4 paper carousel and masthead legibility */
+.is-cn .menu-top .mini-brand-copy span { color: #2c241a !important; }
+.is-cn .menu-top .mini-brand-copy small { color: #6e5a41 !important; }
+.is-cn .menu-ribbon { color: #4a3a27 !important; }
+.is-cn .carousel-arrow { color: #4a3a27 !important; }
+.is-cn .dragon-list { opacity: 1 !important; }
+.is-cn .dragon-chip { opacity: 1 !important; min-height: 46px; }
+.is-cn .dragon-chip b { color: #2f281e !important; font-size: 10px !important; }
+.is-cn .dragon-chip small { color: #6a5a43 !important; font-size: 7px !important; }
+.is-cn .dragon-chip .chip-index { color: #9b3b2a !important; }
+.is-cn .menu-footer, .is-cn .menu-footer * { color: #5b4a35 !important; }
+.is-cn .hud-identity .hud-identity-copy p { color: #7d6447 !important; }
+.is-cn .hud-identity .hud-identity-copy h2 { color: #2f281e !important; }
+.is-cn .hud-tools .hud-icon { color: #4a3a27 !important; }
+
+/* C4 carousel uses chip-name/chip-en, not b/small */
+.is-cn .dragon-chip .chip-name { color: #2f281e !important; font-size: 11px !important; letter-spacing: .14em; }
+.is-cn .dragon-chip .chip-en { color: #6a5942 !important; font-size: 7px !important; }
+.is-cn .dragon-chip .chip-num, .is-cn .dragon-chip .chip-glyph { color: #9b3b2a !important; }
+.is-cn .dragon-chip.is-active { background: rgba(155,59,42,.12) !important; border-color: #9b3b2a !important; transform: translateY(-2px); box-shadow: none; }
+.is-cn .dragon-chip.is-active .chip-name { color: #8d2f23 !important; }
+.is-cn .dragon-chip.is-active .chip-en { color: #6a5942 !important; }
+.is-cn .dragon-chip.is-active .chip-glyph { color: #8d2f23 !important; }

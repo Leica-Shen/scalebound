@@ -19,20 +19,19 @@ const out = path.join(root, 'scalebound.html');
 fs.writeFileSync(out, html);
 console.log(`Standalone game → ${out} (${(fs.statSync(out).size / 1024 / 1024).toFixed(2)} MB)`);
 
-// Beta preview is deliberately a separate artifact. Its experimental systems
-// (auto-flight, rival dragon AI, combat) are gated by window.__SCALEBOUND_BETA__
-// and marked BETA in the HUD, so stable players never receive them by accident.
-const beta = html
-  .replace('<head>', '<head>\n  <script>window.__SCALEBOUND_BETA__ = true;</script>')
-  .replace(/<title>[^<]*<\/title>/, '<title>鳞界 2.1 Beta · SCALEBOUND</title>');
-const betaOut = path.join(root, 'scalebound-beta.html');
-fs.writeFileSync(betaOut, beta);
-console.log(`Beta preview → ${betaOut} (${(fs.statSync(betaOut).size / 1024 / 1024).toFixed(2)} MB)`);
+// F is the standalone combat derivative. It is deliberately separate from
+// standard and C; its rival AI/combat systems are gated by __SCALEBOUND_F__.
+const f = html
+  .replace('<head>', '<head>\n  <script>window.__SCALEBOUND_F__ = true;</script>')
+  .replace(/<title>[^<]*<\/title>/, '<title>鳞界 2.5 F · SCALEBOUND</title>');
+const fOut = path.join(root, 'scalebound-f.html');
+fs.writeFileSync(fOut, f);
+console.log(`F combat edition → ${fOut} (${(fs.statSync(fOut).size / 1024 / 1024).toFixed(2)} MB)`);
 
 // China Edition: standard rules, eight native dragons, ink-wash presentation.
 const cn = html
   .replace('<head>', '<head>\n  <script>window.__SCALEBOUND_CN__ = true;</script>')
-  .replace(/<title>[^<]*<\/title>/, '<title>鳞界 · 山河龙谱 C · SCALEBOUND</title>');
+  .replace(/<title>[^<]*<\/title>/, '<title>鳞界 · 山河龙谱 C4 · SCALEBOUND</title>');
 let cnHtml = cn;
 const fontPath = path.join(root, 'assets', 'MaShanZheng-Regular.ttf');
 if (fs.existsSync(fontPath)) {

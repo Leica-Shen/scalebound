@@ -41,6 +41,7 @@ export class DragonAnimator {
     this.bodyLagPitch = 0;
     this.bodyRoll = 0;
     this.neckLag = 0;
+    this.dyn = null;
     this.onFlapDown = null;
     this._first = true;
   }
@@ -100,6 +101,42 @@ export class DragonAnimator {
         eye.scale.y = baseGlowY * glowOpen;
       }
     }
+  }
+
+  _ensureDynamics(rig) {
+    const bodyN = rig.bodySections?.length || 0;
+    const neckN = rig.neck?.length || 0;
+    const tailN = rig.tail?.length || 0;
+    if (this.dyn && this.dyn.body.length === bodyN && this.dyn.neck.length === neckN && this.dyn.tail.length === tailN) return;
+    const node = () => ({ y: 0, vy: 0, x: 0, vx: 0 });
+    this.dyn = {
+      body: Array.from({ length: bodyN }, node),
+      neck: Array.from({ length: neckN }, node),
+      tail: Array.from({ length: tailN }, node),
+    };
+  }
+
+  _integrateDynamics(dt, yawRate, pitchRate, verticalSpeed, speed) {
+    const dyn = this.dyn;
+    if (!dyn) return;
+    const yawDrive = yawRate * (1.15 + speed * 0.45);
+    const pitchDrive = -(pitchRate * 1.15 + verticalSpeed * 0.028);
+    const step = (nodes, spring, damping, inertia, taper = 1) => {
+      for (let i = 0; i < nodes.length; i++) {
+        const n = nodes[i];
+        const f = nodes.length <= 1 ? 0 : i / (nodes.length - 1);
+        const gain = inertia * (0.32 + f * 0.9) * taper;
+        n.vy += (-n.y * spring - n.vy * damping + yawDrive * gain) * dt;
+        n.vx += (-n.x * spring - n.vx * damping + pitchDrive * gain * 0.8) * dt;
+        n.y += n.vy * dt;
+        n.x += n.vx * dt;
+        n.y = clamp(n.y, -0.45, 0.45);
+        n.x = clamp(n.x, -0.32, 0.32);
+      }
+    };
+    step(dyn.body, 15, 5.4, 0.62);
+    step(dyn.neck, 19, 6.2, 0.45);
+    step(dyn.tail, 9, 3.6, 1.05);
   }
 
   update(dt, state = {}) {
@@ -166,6 +203,14 @@ export class DragonAnimator {
     const isCloud = cfg.wing.sail === false;
     const pose = state.pose || 'flight';
     const coiled = pose === 'landed' && restStyle === 'coil';
+    this._ensureDynamics(rig);
+    this._integrateDynamics(
+      dt,
+      clamp(state.yawRate ?? 0, -2.4, 2.4),
+      clamp(state.pitchRate ?? 0, -2.4, 2.4),
+      clamp(state.verticalSpeed ?? 0, -30, 30),
+      ss.speed,
+    );
     const gliding = !showcase && pose === 'flight' && speedNorm > 0.9 && ss.climb < 0.12 && !activeBeat;
 
     // Flight always breathes through the wings. Even at cruise the dragon beats
@@ -292,8 +337,8 @@ export class DragonAnimator {
       const seg = rig.neck[i];
       const tFrac = nCount <= 1 ? 0 : i / (nCount - 1);
       const breathSway = Math.sin(t * 1.1 + i * 0.42) * 0.006;
-      seg.rotation.x = rig.neckBaseX[i] - roar * 0.05 * (0.35 + tFrac) - headCounter * 0.12 * (1 - tFrac * 0.5) + breathSway + breathRecoil * 0.12 * (0.3 + tFrac * 0.7) - breathRelease * 0.09 * tFrac + (coiled ? 0.10 * (0.35 + tFrac) : 0);
-      seg.rotation.y = (lookSway * 0.22 + ss.lookYaw * 0.22) * (0.25 + tFrac * 0.6) + Math.sin(t * 0.7 + i * 0.3) * 0.006 + (rig.archetype === 'eastern' ? Math.sin(t * 0.9 - i * 0.25) * 0.018 + Math.sin(t * 1.7 - i * 0.52) * 0.045 : 0) + this.neckLag * (0.2 + tFrac * 0.5) + (coiled ? Math.sin(t * 0.35 + i * 0.22) * 0.055 : 0);
+      seg.rotation.x = rig.neckBaseX[i] - roar * 0.05 * (0.35 + tFrac) - headCounter * 0.12 * (1 - tFrac * 0.5) + breathSway + breathRecoil * 0.12 * (0.3 + tFrac * 0.7) - breathRelease * 0.09 * tFrac + (coiled ? 0.10 * (0.35 + tFrac) : 0) + this.dyn.neck[i].x * 0.8;
+      seg.rotation.y = (lookSway * 0.22 + ss.lookYaw * 0.22) * (0.25 + tFrac * 0.6) + Math.sin(t * 0.7 + i * 0.3) * 0.006 + (rig.archetype === 'eastern' ? Math.sin(t * 0.9 - i * 0.25) * 0.018 + Math.sin(t * 1.7 - i * 0.52) * 0.045 : 0) + this.neckLag * (0.2 + tFrac * 0.5) + (coiled ? Math.sin(t * 0.35 + i * 0.22) * 0.055 : 0) + this.dyn.neck[i].y;
       seg.rotation.z = -ss.roll * 0.022 * (0.4 + tFrac);
     }
     if (rig.head) {
@@ -408,9 +453,10 @@ export class DragonAnimator {
         Math.sin(tailClock - i * 0.58) * tailAmp * (0.25 + frac * 0.95) +
         ss.turn * (0.075 + frac * 0.08) +
         sinSafe(i * 0.5 + t * 0.6) * 0.008 +
-        (coiled ? Math.sin(t * 0.28 + i * 0.32) * 0.06 + (0.10 + frac * 0.18) : 0);
+        (coiled ? Math.sin(t * 0.28 + i * 0.32) * 0.06 + (0.10 + frac * 0.18) : 0) +
+        this.dyn.tail[i].y;
       seg.rotation.y = lateral;
-      seg.rotation.x = rig.tailBaseX[i] - ss.climb * 0.022 * frac + Math.sin(tailClock * 0.5 - i * 0.3) * 0.012 + (coiled ? 0.045 * frac : 0);
+      seg.rotation.x = rig.tailBaseX[i] - ss.climb * 0.022 * frac + Math.sin(tailClock * 0.5 - i * 0.3) * 0.012 + (coiled ? 0.045 * frac : 0) + this.dyn.tail[i].x;
       seg.rotation.z = Math.sin(tailClock * 0.62 - i * 0.4) * 0.018 * (0.3 + frac) - ss.roll * 0.008;
     }
     if (rig.tailTipGroup) {
@@ -430,8 +476,8 @@ export class DragonAnimator {
         const f = n <= 1 ? 0 : i / (n - 1);
         const taper = 0.3 + Math.sin(Math.PI * f) * 0.7;
         const wave = Math.sin(t * 1.55 - i * 0.78) * amp;
-        sec.rotation.y = damp(sec.rotation.y, wave - ss.turn * 0.022 * f, 2.4, dt);
-        sec.rotation.x = damp(sec.rotation.x, -ss.pitch * 0.12 * (0.25 + f) + Math.sin(t * 1.2 - i * 0.4) * 0.022, 2.2, dt);
+        sec.rotation.y = damp(sec.rotation.y, wave - ss.turn * 0.022 * f + this.dyn.body[i].y, 2.4, dt);
+        sec.rotation.x = damp(sec.rotation.x, -ss.pitch * 0.12 * (0.25 + f) + Math.sin(t * 1.2 - i * 0.4) * 0.022 + this.dyn.body[i].x, 2.2, dt);
         sec.rotation.z = damp(sec.rotation.z, Math.sin(t * 1.1 - i * 0.5) * 0.022 - ss.roll * 0.022 * f, 2.0, dt);
         sec.position.x = damp(sec.position.x, Math.sin(t * 1.55 - i * 0.72 + 0.6) * lateral * taper, 2.1, dt);
         sec.position.y = damp(sec.position.y, -ss.pitch * 0.28 * taper * (eastern ? 1 : 0.6), 1.8, dt);

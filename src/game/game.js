@@ -1120,7 +1120,7 @@ export class Game {
     this.regenDelay = 1.2;
     this.flapLift = Math.min(4.5, this.flapLift + 2.2 * f.lift);
     this.speedKick = Math.min(3.0, this.speedKick + 1.8);
-    this.speed = Math.min(f.max * 1.5, this.speed + 1.4);
+    this.speed += 1.4;
     this.animator.triggerFlap(1);
     this.audio.flap(1);
     this.shake = Math.max(this.shake, auto ? 0.13 : 0.24);
@@ -1520,6 +1520,8 @@ export class Game {
     if (Math.abs(this.pitchAxis) < 0.035) this.pitch = damp(this.pitch, 0.018, 1.15, dt);
     if (this.stall > 0.16) this.pitch = damp(this.pitch, -0.36, 1.0 + this.stall * 1.6, dt);
     this.pitch = clamp(this.pitch, -1.02, 0.92);
+    this.yawRate = this.turnAxis * f.turn * turnControl;
+    this.pitchRate = this.pitchAxis * (0.76 - this.stall * 0.28);
     const targetRoll = -this.turnAxis * (0.48 + 0.16 * clamp(speedNorm, 0, 1)) + this.pitchAxis * -0.015;
     this.roll = damp(this.roll, targetRoll, 3.8, dt);
     if (Math.abs(this.turnAxis) < 0.02) this.roll = damp(this.roll, 0, 2.0, dt);
@@ -1539,16 +1541,19 @@ export class Game {
     const boostThrust = this.boostActive ? 11.5 * (f.boost || 1) : 0;
     const brakeDrag = this.brake * 4.2;
     const turnDrag = Math.abs(this.turnAxis) * 0.42 + Math.abs(this.roll) * 0.18;
-    const drag = 0.00365 * this.speed * this.speed + 0.016 * this.speed + brakeDrag + turnDrag;
-    let accel = baseThrust + boostThrust - drag + dive * 7.6 * (f.dive || 1) - Math.max(0, climb) * 0.7;
+    // Physical, uncapped airspeed: thrust delivery falls off as 1/(1+v/k).
+    // There is deliberately no hard speed ceiling; the dragon simply gains
+    // speed more and more slowly, while drag and braking remain forces.
+    const inverseSpeed = 1 / (1 + this.speed / 46);
     const tempPenalty = (this.bodyTemp < 34.5 || this.bodyTemp > 39.4) ? 0.88 : 1;
     const hungerPenalty = this.satiety <= 0.2 ? 0.9 : 1;
+    const thermal = tempPenalty * hungerPenalty;
+    let accel = (baseThrust + boostThrust + dive * 7.6 * (f.dive || 1)) * inverseSpeed * thermal
+      - brakeDrag - turnDrag - Math.max(0, climb) * 0.7;
     if (this.speed < 7) accel += (7 - this.speed) * 1.5;
     this.speedKick = damp(this.speedKick, 0, 3.2, dt);
-    accel += this.speedKick * 4.0;
-    this.speed = clamp(this.speed + accel * dt, 2, f.max * 1.46 * tempPenalty * hungerPenalty);
-    if (this.stall > 0.25) this.speed = Math.min(this.speed, f.max);
-    if (this.brake) this.speed = Math.min(this.speed, f.cruise * 1.5);
+    accel += this.speedKick * 4.0 * inverseSpeed;
+    this.speed = Math.max(2, this.speed + accel * dt);
 
     const liftQuality = clamp(this.speed / 18, 0, 1.25);
     const bankLoss = Math.abs(Math.sin(this.roll)) * (1.1 + this.speed * 0.045);
@@ -1580,7 +1585,7 @@ export class Game {
     this.groundY = Math.max(si.ground, SEA_LEVEL);
     this.skimmish = si.water && this.distanceToGround < 15 && this.speed > 24;
     if (this.skimmish) {
-      this.speed = Math.min(f.max * 1.5, this.speed + 1.4 * dt * (f.water || 1));
+      this.speed += 1.4 * dt * (f.water || 1);
       if (Math.random() < dt * 8) this._emitWaterSpray();
     }
     if (si.water && this.dragon.landing?.dive && this.playerPos.y < SEA_LEVEL - 0.8) {
@@ -1882,6 +1887,9 @@ export class Game {
       pose,
       speed: this.speed,
       pitch: this.pitch,
+      yawRate: this.flightState === 'flying' ? (this.yawRate || 0) : 0,
+      pitchRate: this.flightState === 'flying' ? (this.pitchRate || 0) : 0,
+      verticalSpeed: this.playerVelocity.y,
       roll: this.roll,
       turn: this.turnAxis,
       climb: clamp(this.playerVelocity.y / 16, -1, 1),
