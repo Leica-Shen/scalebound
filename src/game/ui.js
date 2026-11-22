@@ -176,7 +176,7 @@ export class UI {
     if (start) start.innerHTML = '<small>ENTER THE SCROLL</small>启 程';
     const random = document.getElementById('randomBtn');
     if (random) random.innerHTML = '<span>随 缘</span>';
-    document.title = '鳞界 · 山河龙谱 C4 · SCALEBOUND';
+    document.title = '鳞界 · 山河龙谱 C5 · SCALEBOUND';
   }
 
   setBeta(on) {

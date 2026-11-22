@@ -130,13 +130,18 @@ export class DragonAnimator {
         n.vx += (-n.x * spring - n.vx * damping + pitchDrive * gain * 0.8) * dt;
         n.y += n.vy * dt;
         n.x += n.vx * dt;
-        n.y = clamp(n.y, -0.45, 0.45);
-        n.x = clamp(n.x, -0.32, 0.32);
+        n.vy = clamp(n.vy, -6.5, 6.5);
+        n.vx = clamp(n.vx, -5.0, 5.0);
+        n.y = clamp(n.y, -0.34, 0.34);
+        n.x = clamp(n.x, -0.25, 0.25);
       }
     };
-    step(dyn.body, 15, 5.4, 0.62);
-    step(dyn.neck, 19, 6.2, 0.45);
-    step(dyn.tail, 9, 3.6, 1.05);
+    // Aerodynamic stiffening: the faster the dragon, the less the tail can
+    // whip around, while the body still carries a vertical ribbon wave.
+    const aero = 1 + speed * 0.022;
+    step(dyn.body, 16, 5.6, 0.58);
+    step(dyn.neck, 20, 6.4, 0.42);
+    step(dyn.tail, 12 * aero, 4.8 + speed * 0.06, 0.78 / aero);
   }
 
   update(dt, state = {}) {
@@ -211,6 +216,7 @@ export class DragonAnimator {
       clamp(state.verticalSpeed ?? 0, -30, 30),
       ss.speed,
     );
+    const verticalSpeed = clamp(state.verticalSpeed ?? 0, -30, 30);
     const gliding = !showcase && pose === 'flight' && speedNorm > 0.9 && ss.climb < 0.12 && !activeBeat;
 
     // Flight always breathes through the wings. Even at cruise the dragon beats
@@ -280,23 +286,26 @@ export class DragonAnimator {
         const autoLagB = isCloud ? Math.sin(this.wingPhase * 0.55 - 0.8) * 0.08 : oscLagB * autoStrength * 0.65;
         const lagA = showcase ? Math.sin(t * 0.85 - 0.6) * 0.035 : autoLagA + (activeBeat ? oscLagA * 0.17 * flapAmplitude : 0);
         const lagB = showcase ? Math.sin(t * 0.85 - 1.1) * 0.055 : autoLagB + (activeBeat ? oscLagB * 0.26 * flapAmplitude : 0);
-        midZ = w.baseMidZ + s * (lagA + ss.turn * twist * 0.5);
-        tipZ = w.baseTipZ + s * (lagB + ss.turn * twist * 0.7);
+        midZ = w.baseMidZ + s * (lagA + ss.turn * twist * 0.5 - verticalSpeed * 0.002);
+        tipZ = w.baseTipZ + s * (lagB + ss.turn * twist * 0.7 - verticalSpeed * 0.0035);
         midY = -s * (sweep * 0.28 + ss.brake * 0.16 + (isCloud ? 0.04 : 0));
         tipY = -s * (sweep * 0.15 + ss.brake * 0.1 + (isCloud ? 0.06 : 0));
         midX = downStroke * 0.035 * (energy + autoStrength * 0.3);
-        tipX = -0.02 + upStroke * 0.04 * (energy + autoStrength * 0.35);
+        tipX = -0.02 + upStroke * 0.04 * (energy + autoStrength * 0.35) + ss.pitch * 0.018;
       }
-      const rate = pose === 'landed' || pose === 'swim' ? 3.2 : 12;
-      w.root.rotation.x = damp(w.root.rotation.x, rootX, rate, dt);
-      w.root.rotation.y = damp(w.root.rotation.y, rootY, rate, dt);
-      w.root.rotation.z = damp(w.root.rotation.z, rootZ, rate, dt);
-      w.mid.rotation.x = damp(w.mid.rotation.x, midX, rate, dt);
-      w.mid.rotation.y = damp(w.mid.rotation.y, midY, rate, dt);
-      w.mid.rotation.z = damp(w.mid.rotation.z, midZ, rate, dt);
-      w.tip.rotation.x = damp(w.tip.rotation.x, tipX, rate, dt);
-      w.tip.rotation.y = damp(w.tip.rotation.y, tipY, rate, dt);
-      w.tip.rotation.z = damp(w.tip.rotation.z, tipZ, rate, dt);
+      const resting = pose === 'landed' || pose === 'swim';
+      const rateRoot = resting ? 3.2 : 10.5;
+      const rateMid = resting ? 3.0 : 7.2;
+      const rateTip = resting ? 2.8 : 4.6;
+      w.root.rotation.x = damp(w.root.rotation.x, rootX, rateRoot, dt);
+      w.root.rotation.y = damp(w.root.rotation.y, rootY, rateRoot, dt);
+      w.root.rotation.z = damp(w.root.rotation.z, rootZ, rateRoot, dt);
+      w.mid.rotation.x = damp(w.mid.rotation.x, midX, rateMid, dt);
+      w.mid.rotation.y = damp(w.mid.rotation.y, midY, rateMid, dt);
+      w.mid.rotation.z = damp(w.mid.rotation.z, midZ, rateMid, dt);
+      w.tip.rotation.x = damp(w.tip.rotation.x, tipX, rateTip, dt);
+      w.tip.rotation.y = damp(w.tip.rotation.y, tipY, rateTip, dt);
+      w.tip.rotation.z = damp(w.tip.rotation.z, tipZ, rateTip, dt);
     }
 
     // ── body bob, breathing, bank ──────────────────────────────────────────
@@ -444,14 +453,14 @@ export class DragonAnimator {
     }
 
     // ── tail: a travelling wave, slower and broader on turns ───────────────
-    const tailAmp = (rig.archetype === 'eastern' ? 0.105 : 0.07) + (1 - Math.min(1, ss.speed)) * 0.06 + ss.stall * 0.07 + showcase * 0.03;
+    const tailAmp = (rig.archetype === 'eastern' ? 0.085 : 0.06) + (1 - Math.min(1, ss.speed)) * 0.05 + ss.stall * 0.06 + showcase * 0.025;
     const tailClock = t * (2.4 + ss.speed * 2.2);
     for (let i = 0; i < rig.tail.length; i++) {
       const seg = rig.tail[i];
       const frac = i / Math.max(1, rig.tail.length - 1);
       const lateral =
         Math.sin(tailClock - i * 0.58) * tailAmp * (0.25 + frac * 0.95) +
-        ss.turn * (0.075 + frac * 0.08) +
+        ss.turn * (0.060 + frac * 0.065) +
         sinSafe(i * 0.5 + t * 0.6) * 0.008 +
         (coiled ? Math.sin(t * 0.28 + i * 0.32) * 0.06 + (0.10 + frac * 0.18) : 0) +
         this.dyn.tail[i].y;
@@ -477,10 +486,10 @@ export class DragonAnimator {
         const taper = 0.3 + Math.sin(Math.PI * f) * 0.7;
         const wave = Math.sin(t * 1.55 - i * 0.78) * amp;
         sec.rotation.y = damp(sec.rotation.y, wave - ss.turn * 0.022 * f + this.dyn.body[i].y, 2.4, dt);
-        sec.rotation.x = damp(sec.rotation.x, -ss.pitch * 0.12 * (0.25 + f) + Math.sin(t * 1.2 - i * 0.4) * 0.022 + this.dyn.body[i].x, 2.2, dt);
+        sec.rotation.x = damp(sec.rotation.x, -ss.pitch * 0.12 * (0.25 + f) - ss.climb * 0.045 * (0.3 + f) + Math.sin(t * 1.2 - i * 0.4) * 0.022 + this.dyn.body[i].x, 2.2, dt);
         sec.rotation.z = damp(sec.rotation.z, Math.sin(t * 1.1 - i * 0.5) * 0.022 - ss.roll * 0.022 * f, 2.0, dt);
         sec.position.x = damp(sec.position.x, Math.sin(t * 1.55 - i * 0.72 + 0.6) * lateral * taper, 2.1, dt);
-        sec.position.y = damp(sec.position.y, -ss.pitch * 0.28 * taper * (eastern ? 1 : 0.6), 1.8, dt);
+        sec.position.y = damp(sec.position.y, (-ss.pitch * 0.28 - ss.climb * 0.10) * taper * (eastern ? 1 : 0.6), 1.8, dt);
       }
     }
 

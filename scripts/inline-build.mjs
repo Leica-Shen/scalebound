@@ -23,7 +23,7 @@ console.log(`Standalone game → ${out} (${(fs.statSync(out).size / 1024 / 1024)
 // standard and C; its rival AI/combat systems are gated by __SCALEBOUND_F__.
 const f = html
   .replace('<head>', '<head>\n  <script>window.__SCALEBOUND_F__ = true;</script>')
-  .replace(/<title>[^<]*<\/title>/, '<title>鳞界 2.5 F · SCALEBOUND</title>');
+  .replace(/<title>[^<]*<\/title>/, '<title>鳞界 2.6 F · SCALEBOUND</title>');
 const fOut = path.join(root, 'scalebound-f.html');
 fs.writeFileSync(fOut, f);
 console.log(`F combat edition → ${fOut} (${(fs.statSync(fOut).size / 1024 / 1024).toFixed(2)} MB)`);
@@ -31,7 +31,7 @@ console.log(`F combat edition → ${fOut} (${(fs.statSync(fOut).size / 1024 / 10
 // China Edition: standard rules, eight native dragons, ink-wash presentation.
 const cn = html
   .replace('<head>', '<head>\n  <script>window.__SCALEBOUND_CN__ = true;</script>')
-  .replace(/<title>[^<]*<\/title>/, '<title>鳞界 · 山河龙谱 C4 · SCALEBOUND</title>');
+  .replace(/<title>[^<]*<\/title>/, '<title>鳞界 · 山河龙谱 C5 · SCALEBOUND</title>');
 let cnHtml = cn;
 const fontPath = path.join(root, 'assets', 'MaShanZheng-Regular.ttf');
 if (fs.existsSync(fontPath)) {

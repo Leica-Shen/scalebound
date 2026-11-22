@@ -24,8 +24,10 @@ function baseHeightAt(x, z) {
   const wz = z + w2 * 160;
 
   const continental = fbm2(wx * 0.00017 + 3.1, wz * 0.00017 - 9.4, 4, S + 11);
-  const shelf = smoothstep(-0.3, 0.1, continental);
-  let h = -54 + 102 * shelf + continental * 32;
+  // Wider continental shelves and a small epeiric-sea bias create more
+  // connected land and island chains without removing the open ocean.
+  const shelf = smoothstep(-0.38, 0.06, continental);
+  let h = -50 + 112 * shelf + continental * 34 + 6;
 
   // broad rolling land
   h += fbm2(wx * 0.00062 + 21.2, wz * 0.00062 - 4.8, 3, S + 21) * 21 * shelf;

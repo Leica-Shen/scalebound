@@ -78,11 +78,11 @@ ui.setBeta(BETA);
 ui.setChina(CN);
 if (BETA) {
   document.documentElement.classList.add('is-beta', 'is-f');
-  document.title = '鳞界 2.5 F · SCALEBOUND';
+  document.title = '鳞界 2.6 F · SCALEBOUND';
 }
 if (CN) {
   document.documentElement.classList.add('is-cn');
-  document.title = '鳞界 · 山河龙谱 C4 · SCALEBOUND';
+  document.title = '鳞界 · 山河龙谱 C5 · SCALEBOUND';
 }
 
 window.__SCALEBOUND__ = {

@@ -354,7 +354,7 @@ export class World {
     this.lastPropsBuild = -1;
     // A hand-picked opening vista: a wooded river valley looking into a
     // golden sea horizon. The rest of the world remains entirely procedural.
-    const handPicked = { x: -2120, z: -2960, yaw: 2.23 };
+    const handPicked = { x: -2280, z: -2760, yaw: 2.23 };
     const handH = heightAt(handPicked.x, handPicked.z);
     this.spawn = { ...handPicked, h: handH, terrain: handH, y: Math.max(58, handH + 56), score: 0 };
     if (typeof window !== 'undefined') {
@@ -424,7 +424,7 @@ export class World {
   regenerateSpawn() {
     // A hand-picked opening vista: a wooded river valley looking into a
     // golden sea horizon. The rest of the world remains entirely procedural.
-    const handPicked = { x: -2120, z: -2960, yaw: 2.23 };
+    const handPicked = { x: -2280, z: -2760, yaw: 2.23 };
     const handH = heightAt(handPicked.x, handPicked.z);
     this.spawn = { ...handPicked, h: handH, terrain: handH, y: Math.max(58, handH + 56), score: 0 };
     return this.spawn;

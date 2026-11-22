@@ -1500,7 +1500,7 @@ export class Game {
     const wasBoosting = this.boostActive;
     this.boostActive = canBoost && this.stamina > 0.4;
     if (this.boostActive) {
-      this.stamina = Math.max(0, this.stamina - 21 * dt * (0.9 + 0.1 * f.boost));
+      this.stamina = Math.max(0, this.stamina - 21 * dt * (0.9 + 0.1 * f.boost) * (1.25 - (this.thermalMobility || 1) * 0.25));
       this.regenDelay = 1.0;
     } else if (this.stamina <= 0.4 && shiftHeld) {
       this.stamina = 0;
@@ -1514,7 +1514,7 @@ export class Game {
       this.doFlap(this.flapHeld && !this.touchFlap);
     }
 
-    const turnControl = (1 - this.stall * 0.55) * (0.3 + 0.7 * clamp(this.speed / 26, 0.2, 1.3));
+    const turnControl = (1 - this.stall * 0.55) * (0.3 + 0.7 * clamp(this.speed / 26, 0.2, 1.3)) * (this.thermalMobility || 1);
     this.yaw += this.turnAxis * f.turn * turnControl * dt;
     this.pitch += this.pitchAxis * (0.76 - this.stall * 0.28) * dt;
     if (Math.abs(this.pitchAxis) < 0.035) this.pitch = damp(this.pitch, 0.018, 1.15, dt);
@@ -1545,11 +1545,20 @@ export class Game {
     // There is deliberately no hard speed ceiling; the dragon simply gains
     // speed more and more slowly, while drag and braking remain forces.
     const inverseSpeed = 1 / (1 + this.speed / 46);
-    const tempPenalty = (this.bodyTemp < 34.5 || this.bodyTemp > 39.4) ? 0.88 : 1;
+    const thermalMobility = clamp(1
+      - Math.max(0, 35.4 - this.bodyTemp) * 0.11
+      - Math.max(0, this.bodyTemp - 39.2) * 0.13, 0.52, 1);
+    this.thermalMobility = thermalMobility;
+    const tempPenalty = clamp(thermalMobility * 0.96, 0.5, 1);
     const hungerPenalty = this.satiety <= 0.2 ? 0.9 : 1;
     const thermal = tempPenalty * hungerPenalty;
+    // Above ~64 m/s the wing/airframe begins to pay a real wave-drag penalty.
+    // It is a force, not a speed cap: climbing speed above this threshold
+    // decays when thrust is not actively maintained.
+    const overspeed = Math.max(0, this.speed - 64);
+    const highSpeedDrag = overspeed * 0.12 + overspeed * overspeed * 0.0017;
     let accel = (baseThrust + boostThrust + dive * 7.6 * (f.dive || 1)) * inverseSpeed * thermal
-      - brakeDrag - turnDrag - Math.max(0, climb) * 0.7;
+      - brakeDrag - turnDrag - Math.max(0, climb) * 0.7 - highSpeedDrag;
     if (this.speed < 7) accel += (7 - this.speed) * 1.5;
     this.speedKick = damp(this.speedKick, 0, 3.2, dt);
     accel += this.speedKick * 4.0 * inverseSpeed;
@@ -1559,7 +1568,7 @@ export class Game {
     const bankLoss = Math.abs(Math.sin(this.roll)) * (1.1 + this.speed * 0.045);
     const windLift = Math.sin(this.time * 0.36 + this.playerPos.x * 0.006) * 0.16;
     let sink = (0.64 + (1 - Math.min(1, liftQuality)) * 8.5) / Math.max(0.75, f.lift);
-    sink += bankLoss + this.stall * 11.0;
+    sink += bankLoss + this.stall * 11.0 + (1 - (this.thermalMobility || 1)) * 5.2;
     sink -= this.flapLift;
     sink -= this.autoFlapLift;
     sink += windLift;
@@ -1971,13 +1980,30 @@ export class Game {
     const comfort = survival.comfort || [0, 33];
     const comfortMid = (comfort[0] + comfort[1]) * 0.5;
     const nearFire = this.abilities.fires.some((fi) => Math.hypot(fi.x - this.playerPos.x, fi.z - this.playerPos.z) < 32);
+    // Thermal model: air temperature, altitude lapse, region, wind chill,
+    // water, fire and speed-generated skin heat all contribute.
+    const altitude = Math.max(0, this.playerPos.y);
+    const terrainAltitude = Math.max(0, this.world.getHeight(this.playerPos.x, this.playerPos.z));
+    const regionId = this.regionInfo?.id || 'plain';
+    const regionBias = regionId === 'sea' || regionId === 'reef' ? -1.2
+      : regionId === 'coast' ? -0.4
+      : regionId === 'snow' || regionId === 'high' ? -2.4
+      : regionId === 'mountain' ? -1.5
+      : regionId === 'forest' || regionId === 'swamp' ? 0.5
+      : regionId === 'desert' ? 1.4 : 0;
+    const altitudeChill = clamp((altitude - 55) * 0.012 + (terrainAltitude - 35) * 0.004, 0, 4.4);
+    const windChill = clamp(this.speed * 0.017, 0, 1.8);
+    const skinHeat = clamp((this.speed - 42) * 0.012, 0, 0.9);
+    const nearWater = this.surfaceInfo.water || this.underwater;
     let targetTemp = 36.6 + clamp((this.ambientTemp - comfortMid) * 0.085, -4.8, 4.8);
+    targetTemp += regionBias - altitudeChill - windChill + skinHeat;
     if (this.ambientTemp < comfort[0]) targetTemp -= 1.8;
     else if (this.ambientTemp > comfort[1]) targetTemp += 1.8;
     if (nearFire) targetTemp += 3.0;
-    if (this.underwater) targetTemp -= 1.8;
+    if (nearWater) targetTemp -= 1.1;
+    if (this.underwater) targetTemp -= 1.4;
     if (env.rain > 0.3) targetTemp -= 1.2;
-    if (flying) targetTemp -= clamp(this.speed * 0.022, 0, 1.3);
+    if (flying) targetTemp -= clamp(this.speed * 0.008, 0, 0.6);
     this.bodyTemp = damp(this.bodyTemp, clamp(targetTemp, 30.5, 41.5), grounded || floating ? 0.12 : 0.055, dt);
     const restDelay = grounded || floating || swimming ? 0 : this.regenDelay;
     if (restDelay <= 0 && !this.boostActive) {
@@ -2002,7 +2028,8 @@ export class Game {
       }
       this.recovering = false;
     }
-    const hungerScale = (flying ? 1 : 0.45) * (survival.hungerRate || 1);
+    const thermalDemand = 1 + Math.max(0, Math.abs(this.bodyTemp - 36.6) - 0.6) * 0.09;
+    const hungerScale = (flying ? 1 : 0.45) * (survival.hungerRate || 1) * thermalDemand;
     this.satiety = Math.max(0, this.satiety - 0.065 * hungerScale * dt);
     if (this.satiety > 55 && grounded && this.bodyTemp > 34) this.bodyTemp = Math.min(37.4, this.bodyTemp + 0.01 * dt);
     this.resting = grounded || floating || swimming;
